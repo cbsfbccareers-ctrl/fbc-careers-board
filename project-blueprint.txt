@@ -1,0 +1,79 @@
+FBC Autonomous Job Board: Cursor Master Blueprint
+Role: You are an expert Next.js, Supabase, and Vercel AI SDK developer. You will act as my coding assistant to build this application step-by-step.
+
+Core Stack: Next.js (App Router), Tailwind CSS, shadcn/ui, Supabase (PostgreSQL), Vercel AI SDK, Vercel Hosting & Cron.
+
+Project Context: A zero-budget, autonomous job board for a university Fintech & Blockchain Club. Roles are categorized into verticals: TradFi, DeFi, Crypto, and AI Infrastructure.
+
+Please execute the following phases sequentially. Do not move to the next phase until I confirm the current one works.
+
+Phase 1: UI Shell & Core Structure
+Initialize shadcn/ui in the project. Install the following components: button, input, card, badge, select, toast (for notifications).
+
+Set up the core routing structure:
+
+/: The public-facing job board.
+
+/admin/ingest: A hidden route for adding new jobs.
+
+Update the global layout to include a clean, minimalist navigation bar with the club's name.
+
+Phase 2: Database Schema & Supabase Connection
+Write the SQL required to create a jobs table in Supabase with the following columns:
+
+id (UUID, Primary Key)
+
+created_at (Timestamp)
+
+title (Text)
+
+company (Text)
+
+location (Text)
+
+vertical_tag (Enum/Text: 'TradFi', 'DeFi', 'Crypto', 'AI Infrastructure', 'Other')
+
+application_url (Text, UNIQUE CONSTRAINT)
+
+status (Text: default 'Active')
+
+expires_at (Timestamp)
+
+Create a utils/supabase.ts file to initialize the Supabase client using environment variables (NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY).
+
+Phase 3: The Autonomous Ingestion Pipeline (Admin)
+Build the UI for /admin/ingest: A simple form with a single text input for a URL and a "Submit" button.
+
+Create an API route at /api/ingest.
+
+In the API route, implement the following pipeline:
+
+Step A: Accept the URL from the client.
+
+Step B: Call the Jina Reader API (https://r.jina.ai/{URL}) to extract the markdown text from the job posting.
+
+Step C: Pass the extracted text to the Vercel AI SDK (generateObject). Define a Zod schema to extract: title, company, location, vertical_tag, and application_url. Prompt the AI to infer the vertical tag based on the job description.
+
+Step D: Calculate an expires_at date 30 days from now.
+
+Step E: Insert the JSON data into the Supabase jobs table.
+
+Implement error handling: If Supabase returns a unique constraint error (code 23505), catch it and return a friendly "Job already exists" message to the frontend toast notification.
+
+Phase 4: Public Job Board & Filtering (Frontend)
+Build the UI for the / route using a responsive grid of shadcn Cards to display jobs.
+
+Fetch only jobs from Supabase where status is 'Active', ordered by created_at descending.
+
+Build a filter bar above the grid with a Select dropdown to filter the displayed jobs by vertical_tag (TradFi, DeFi, Crypto, AI Infrastructure).
+
+Ensure each job card prominently displays the Vertical Badge and has a clean "Apply" button linking to the application_url.
+
+Phase 5: Self-Cleaning Automation (Cron Job)
+Create an API route at /api/cron/archive.
+
+Secure the route using Vercel's Cron Secret authorization header to prevent unauthorized triggers.
+
+Write a Supabase update query that sets status to 'Archived' for any job where expires_at is less than the current date and time.
+
+Create a vercel.json file in the root of the project to schedule this cron job to run daily at midnight (0 0 * * *).
