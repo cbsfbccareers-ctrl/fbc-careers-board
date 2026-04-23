@@ -41,24 +41,16 @@ expires_at (Timestamp)
 
 Create a utils/supabase.ts file to initialize the Supabase client using environment variables (NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY).
 
-Phase 3: The Autonomous Ingestion Pipeline (Admin)
-Build the UI for /admin/ingest: A simple form with a single text input for a URL and a "Submit" button.
-
-Create an API route at /api/ingest.
-
-In the API route, implement the following pipeline:
-
-Step A: Accept the URL from the client.
-
-Step B: Call the Jina Reader API (https://r.jina.ai/{URL}) to extract the markdown text from the job posting.
-
-Step C: Pass the extracted text to the Vercel AI SDK (generateObject). Define a Zod schema to extract: title, company, location, vertical_tag, and application_url. Prompt the AI to infer the vertical tag based on the job description.
-
-Step D: Calculate an expires_at date 30 days from now.
-
-Step E: Insert the JSON data into the Supabase jobs table.
-
-Implement error handling: If Supabase returns a unique constraint error (code 23505), catch it and return a friendly "Job already exists" message to the frontend toast notification.
+Phase 3: The Copilot Ingestion Pipeline (Human-in-the-Loop)
+- Build the UI at /admin/ingest with two states: a URL input, and a review form.
+- Create an API route that takes the URL, fetches the text via Jina Reader API (r.jina.ai).
+- Use Vercel AI SDK (OpenAI gpt-4o-mini) with a strict Zod schema to parse the text.
+- Extract: title, company, location, application_url, and infer a vertical_tag.
+- Calculate an expires_at date (30 days from now).
+- Return the JSON to the UI.
+- Populate the review form so the admin can edit/fix any AI hallucinations.
+- Admin clicks 'Save to Database' to execute the Supabase insert from the client.
+- Handle unique URL constraints gracefully (toast error if job exists).
 
 Phase 4: Public Job Board & Filtering (Frontend)
 Build the UI for the / route using a responsive grid of shadcn Cards to display jobs.
