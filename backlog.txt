@@ -1,0 +1,3 @@
+- Add admin interface to add new categories for the enum fields.
+- Add a passcode to access the application (Fintech only)
+- Make the AI better!

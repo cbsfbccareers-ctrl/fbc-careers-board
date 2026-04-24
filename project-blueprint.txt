@@ -42,15 +42,26 @@ expires_at (Timestamp)
 Create a utils/supabase.ts file to initialize the Supabase client using environment variables (NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY).
 
 Phase 3: The Copilot Ingestion Pipeline (Human-in-the-Loop)
-- Build the UI at /admin/ingest with two states: a URL input, and a review form.
-- Create an API route that takes the URL, fetches the text via Jina Reader API (r.jina.ai).
-- Use Vercel AI SDK (OpenAI gpt-4o-mini) with a strict Zod schema to parse the text.
-- Extract: title, company, location, application_url, and infer a vertical_tag.
-- Calculate an expires_at date (30 days from now).
-- Return the JSON to the UI.
-- Populate the review form so the admin can edit/fix any AI hallucinations.
-- Admin clicks 'Save to Database' to execute the Supabase insert from the client.
-- Handle unique URL constraints gracefully (toast error if job exists).
+- Build UI at /admin/ingest with a URL input and a review form.
+- API route fetches URL via Jina Reader API (r.jina.ai).
+- Fallback: Support an optional 'rawText' input. If provided, skip the Jina fetch and parse the pasted text directly, bypassing anti-bot protections.
+- Use Vercel AI SDK (gpt-4o-mini) to extract:
+  - title (string)
+  - company (string)
+  - locations (array of strings)
+  - employment_type (enum: "In-Semester Internship", "Summer Internship", "Full-Time", "Contract/Freelance")
+  - position (enum: "Corporate Development", "Product Management", "Consulting", "Engineering", "Operations", "Finance", "Marketing", "Other")
+  - vertical_tag (enum: "TradFi", "DeFi", "Crypto", "AI Infrastructure", "General Tech", "Healthcare", "Other")
+  - visa_sponsorship (enum: "Yes", "No", "Unspecified")
+  - compensation (string, optional)
+  - original_posted_date (string, optional)
+  - application_deadline (string, optional - AI hunts for hard deadlines)
+  - application_url (string)
+- Expiry Logic: If the AI finds an application_deadline, set expires_at to that date. If it finds nothing, default expires_at to 45 days from now.
+- Return JSON to populate the UI form.
+- The UI review form MUST include all extracted fields, including an editable HTML date-picker for expires_at so the admin can manually override the deadline.
+- User clicks 'Save to Database' to execute Supabase insert from the client.
+- Handle unique URL constraints gracefully (toast error).
 
 Phase 4: Public Job Board & Filtering (Frontend)
 Build the UI for the / route using a responsive grid of shadcn Cards to display jobs.
