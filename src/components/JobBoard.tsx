@@ -616,7 +616,7 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
             placeholder="Search roles, companies, or locations..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-11 w-full min-w-0 text-base"
+            className="h-10 w-full min-w-0 text-base"
             autoComplete="off"
             spellCheck={false}
           />
@@ -626,7 +626,7 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
             <p className="text-sm font-medium sm:text-base">Industry</p>
             <Select value={industryFilter} onValueChange={setIndustryFilter}>
               <SelectTrigger
-                className="h-11 w-full min-w-0 text-base"
+                className="h-10 w-full min-w-0 text-base"
                 aria-label="Filter by industry / vertical"
               >
                 <SelectValue placeholder="All verticals" />
@@ -650,7 +650,7 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
               onValueChange={setEmploymentFilter}
             >
               <SelectTrigger
-                className="h-11 w-full min-w-0 text-base"
+                className="h-10 w-full min-w-0 text-base"
                 aria-label="Filter by employment type"
               >
                 <SelectValue placeholder="All job types" />
@@ -671,7 +671,7 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
             <p className="text-sm font-medium sm:text-base">Position</p>
             <Select value={positionFilter} onValueChange={setPositionFilter}>
               <SelectTrigger
-                className="h-11 w-full min-w-0 text-base"
+                className="h-10 w-full min-w-0 text-base"
                 aria-label="Filter by position / function"
               >
                 <SelectValue placeholder="All positions" />
@@ -690,43 +690,45 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
           </div>
           <div className="space-y-2">
             <p className="text-sm font-medium sm:text-base">View</p>
-            <div className="flex flex-col gap-3 min-[500px]:flex-row min-[500px]:items-end min-[500px]:justify-between">
-              <div className="flex flex-1 flex-wrap items-center gap-2">
-                {isAdmin ? (
-                  <div className="flex h-11 min-w-0 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm min-[500px]:text-base">
-                    <Switch
-                      id="show-archived"
-                      checked={showArchived}
-                      onCheckedChange={setShowArchived}
-                      aria-label="Show archived jobs"
-                    />
-                    <label
-                      htmlFor="show-archived"
-                      className="text-muted-foreground"
-                    >
-                      Show archived
-                    </label>
-                  </div>
-                ) : (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="flex h-11 min-w-0 cursor-not-allowed items-center gap-2 rounded-md border border-input bg-background/80 px-3 text-sm opacity-50 min-[500px]:text-base">
-                        <Switch
-                          id="show-archived"
-                          checked={false}
-                          disabled
-                          aria-label="Show archived jobs (admin mode required)"
-                        />
-                        <span className="text-muted-foreground">Show archived</span>
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="max-w-[16rem]">
-                      Turn on Admin mode in the top bar to show archived
-                      listings.
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-              </div>
+            <div className="flex h-10 min-h-10 w-full min-w-0 items-center gap-2">
+              {isAdmin ? (
+                <div className="flex h-10 min-h-10 shrink-0 items-center gap-2 rounded-md border border-input bg-background px-2.5 text-sm min-[500px]:px-3 min-[500px]:text-base">
+                  <Switch
+                    id="show-archived"
+                    className="shrink-0"
+                    checked={showArchived}
+                    onCheckedChange={setShowArchived}
+                    aria-label="Show archived jobs"
+                  />
+                  <label
+                    htmlFor="show-archived"
+                    className="cursor-pointer whitespace-nowrap leading-none text-muted-foreground"
+                  >
+                    Show archived
+                  </label>
+                </div>
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex h-10 min-h-10 shrink-0 cursor-not-allowed items-center gap-2 rounded-md border border-input bg-background/80 px-2.5 text-sm opacity-50 min-[500px]:px-3 min-[500px]:text-base">
+                      <Switch
+                        id="show-archived"
+                        className="shrink-0"
+                        checked={false}
+                        disabled
+                        aria-label="Show archived jobs (admin mode required)"
+                      />
+                      <span className="whitespace-nowrap leading-none text-muted-foreground">
+                        Show archived
+                      </span>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-[16rem]">
+                    Turn on Admin mode in the top bar to show archived
+                    listings.
+                  </TooltipContent>
+                </Tooltip>
+              )}
               <ToggleGroup
                 type="single"
                 value={viewMode}
@@ -734,25 +736,25 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
                   if (v) setViewMode(v as ViewMode);
                 }}
                 variant="outline"
-                size="default"
+                size="lg"
                 spacing={0}
-                className="h-11 w-full shrink-0 min-[500px]:w-auto"
+                className="h-10 min-h-10 min-w-0 flex-1 min-[500px]:w-auto min-[500px]:flex-none"
               >
                 <ToggleGroupItem
                   value="grid"
                   aria-label="Grid view"
-                  className="flex-1 gap-2 text-base data-[state=on]:bg-accent"
+                  className="h-10 min-h-0 min-w-0 flex-1 gap-2 text-base data-[state=on]:bg-accent min-[500px]:flex-initial"
                 >
                   <LayoutGrid className="size-4 shrink-0" />
-                  Grid
+                  <span className="whitespace-nowrap">Grid</span>
                 </ToggleGroupItem>
                 <ToggleGroupItem
                   value="table"
                   aria-label="Table view"
-                  className="flex-1 gap-2 text-base data-[state=on]:bg-accent"
+                  className="h-10 min-h-0 min-w-0 flex-1 gap-2 text-base data-[state=on]:bg-accent min-[500px]:flex-initial"
                 >
                   <Table2 className="size-4 shrink-0" />
-                  Table
+                  <span className="whitespace-nowrap">Table</span>
                 </ToggleGroupItem>
               </ToggleGroup>
             </div>
