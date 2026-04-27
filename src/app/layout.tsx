@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
+import { GlobalNav } from "@/components/global-nav";
 import { Providers } from "@/components/providers";
-import { SiteHeader } from "@/components/site-header";
 
 import "./globals.css";
 
@@ -35,7 +35,7 @@ export default function RootLayout({
       <body className="min-h-full">
         <Providers>
           <div className="flex min-h-full flex-col">
-            <SiteHeader />
+            <GlobalNav />
             {children}
           </div>
         </Providers>

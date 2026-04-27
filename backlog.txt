@@ -1,3 +1,31 @@
 - Add admin interface to add new categories for the enum fields.
 - Add a passcode to access the application (Fintech only)
 - Make the AI better - Dynamic logging
+
+--
+
+Epic 1: The Admin Experience
+Right now, you have a world-class ingestion engine, but your management engine is just a placeholder page.
+
+The "Archive/Draft" Toggle: Build the UI for the manual override we discussed. You need a dashboard table where you can view all live jobs and click a button to instantly flip their status to "Archived" (to pull them down early) or "Draft" (to stage them for later).
+
+The Edit/Update Flow: If a company changes its compensation package or extends a deadline after you've already posted the job, you need a way to edit that specific Supabase row directly from the /admin portal without having to rescan the URL.
+
+Epic 2: The AI "Gold Standard" Flywheel
+We successfully implemented "Shadow Logging" to quietly track the AI's original guesses. The next step is closing the loop to make the AI actively learn from you.
+
+Dynamic Few-Shot Prompting: Add a "Mark as Gold Standard" checkbox to your review form. Update the Next.js API to automatically pull the three most recently tagged "Gold Standard" jobs from Supabase and inject them into the AI's prompt as live training examples.
+
+Epic 3: Security & Exclusivity
+We built a gorgeous, Braintrust-style frontend, but right now, anyone on the internet can see it.
+
+Columbia-Only Authentication: Implement an auth layer (using Supabase Auth or NextAuth) that forces users to sign in. We can configure the logic to strictly require a @columbia.edu (or specific CBS) email address to access the / job board route.
+
+Admin Route Protection: Lock down the /admin and /admin/ingest routes so that only specific, hardcoded admin emails (like yours and your co-president's) can access the ingestion engine.
+
+Epic 4: Quality Assurance & Automation
+We did manual "Smoke Testing" in production, but as the club relies on this tool more heavily, you'll want peace of mind that updates won't break the app.
+
+Automated E2E Testing: Write Playwright or Cypress scripts to automatically test the ingestion pipeline. The script would paste a URL, check if the AI returns data, and verify the frontend renders correctly, preventing future code pushes from breaking your core workflows.
+
+The Auto-Delete Cron Job (Optional): We firmly decided on the "Soft Delete" strategy for now to preserve your data. But if you ever change your mind and want to aggressively prune old rows, the pg_cron setup is waiting in the wings.

@@ -8,10 +8,8 @@ import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardFooter,
   CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -30,7 +28,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { EMPLOYMENT_TYPES, VERTICAL_TAGS } from "@/lib/jobs-constants";
+import {
+  EMPLOYMENT_TYPES,
+  POSITIONS,
+  VERTICAL_TAGS,
+} from "@/lib/jobs-constants";
+import { formatAddedAgo, isNycLocationLabel } from "@/lib/job-display";
 import { cn } from "@/lib/utils";
 
 export type PublicJob = {
@@ -42,6 +45,7 @@ export type PublicJob = {
   compensation: string | null;
   vertical_tag: string;
   employment_type: string | null;
+  position: string | null;
   application_url: string;
 };
 
@@ -53,30 +57,52 @@ const FILTER_ALL = "all" as const;
 
 type ViewMode = "grid" | "table";
 
-function formatLocations(locations: string[] | null): string {
-  if (!locations || locations.length === 0) return "—";
-  return locations.map((l) => l.trim()).filter(Boolean).join(" | ");
-}
-
-function matchesSearch(
-  job: PublicJob,
-  q: string,
-): boolean {
+function matchesSearch(job: PublicJob, q: string): boolean {
   if (!q.trim()) return true;
   const s = q.trim().toLowerCase();
-  const inTitle = job.title.toLowerCase().includes(s);
-  const inCompany = job.company.toLowerCase().includes(s);
-  const inLocs = (job.locations ?? [])
-    .join(" ")
-    .toLowerCase()
-    .includes(s);
-  return inTitle || inCompany || inLocs;
+  const pos = (job.position ?? "").toLowerCase();
+  return (
+    job.title.toLowerCase().includes(s) ||
+    job.company.toLowerCase().includes(s) ||
+    (job.locations ?? []).join(" ").toLowerCase().includes(s) ||
+    pos.includes(s)
+  );
+}
+
+function LocationPills({ locations }: { locations: string[] | null }) {
+  const list = (locations ?? [])
+    .map((l) => l.trim())
+    .filter(Boolean);
+  if (list.length === 0) {
+    return <span className="text-sm text-muted-foreground">—</span>;
+  }
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {list.map((loc, i) => {
+        const nyc = isNycLocationLabel(loc);
+        return (
+          <Badge
+            key={`${i}-${loc}`}
+            variant="secondary"
+            className={cn(
+              "max-w-full font-normal [text-wrap:balance]",
+              nyc &&
+                "border-transparent bg-indigo-600 text-white hover:bg-indigo-600/90 dark:bg-indigo-500 dark:text-white dark:hover:bg-indigo-500/90",
+            )}
+          >
+            {loc}
+          </Badge>
+        );
+      })}
+    </div>
+  );
 }
 
 export function JobBoard({ jobs }: JobBoardProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [industryFilter, setIndustryFilter] = useState<string>(FILTER_ALL);
   const [employmentFilter, setEmploymentFilter] = useState<string>(FILTER_ALL);
+  const [positionFilter, setPositionFilter] = useState<string>(FILTER_ALL);
   const [searchQuery, setSearchQuery] = useState("");
 
   const filtered = useMemo(() => {
@@ -88,10 +114,20 @@ export function JobBoard({ jobs }: JobBoardProps) {
         const t = job.employment_type?.trim() ?? "";
         if (t !== employmentFilter) return false;
       }
+      if (positionFilter !== FILTER_ALL) {
+        const p = job.position?.trim() ?? "";
+        if (p !== positionFilter) return false;
+      }
       if (!matchesSearch(job, searchQuery)) return false;
       return true;
     });
-  }, [jobs, industryFilter, employmentFilter, searchQuery]);
+  }, [
+    jobs,
+    industryFilter,
+    employmentFilter,
+    positionFilter,
+    searchQuery,
+  ]);
 
   if (jobs.length === 0) {
     return (
@@ -110,7 +146,10 @@ export function JobBoard({ jobs }: JobBoardProps) {
         )}
       >
         <div className="space-y-2">
-          <label htmlFor="job-search" className="text-sm font-medium sm:text-base">
+          <label
+            htmlFor="job-search"
+            className="text-sm font-medium sm:text-base"
+          >
             Search
           </label>
           <Input
@@ -124,7 +163,7 @@ export function JobBoard({ jobs }: JobBoardProps) {
             spellCheck={false}
           />
         </div>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1fr_minmax(0,auto)] lg:items-end">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <div className="space-y-2">
             <p className="text-sm font-medium sm:text-base">Industry</p>
             <Select value={industryFilter} onValueChange={setIndustryFilter}>
@@ -148,7 +187,10 @@ export function JobBoard({ jobs }: JobBoardProps) {
           </div>
           <div className="space-y-2">
             <p className="text-sm font-medium sm:text-base">Job type</p>
-            <Select value={employmentFilter} onValueChange={setEmploymentFilter}>
+            <Select
+              value={employmentFilter}
+              onValueChange={setEmploymentFilter}
+            >
               <SelectTrigger
                 className="h-11 w-full min-w-0 text-base"
                 aria-label="Filter by employment type"
@@ -162,6 +204,27 @@ export function JobBoard({ jobs }: JobBoardProps) {
                 {EMPLOYMENT_TYPES.map((t) => (
                   <SelectItem key={t} value={t} className="text-base">
                     {t}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-medium sm:text-base">Position</p>
+            <Select value={positionFilter} onValueChange={setPositionFilter}>
+              <SelectTrigger
+                className="h-11 w-full min-w-0 text-base"
+                aria-label="Filter by position / function"
+              >
+                <SelectValue placeholder="All positions" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={FILTER_ALL} className="text-base">
+                  All positions
+                </SelectItem>
+                {POSITIONS.map((p) => (
+                  <SelectItem key={p} value={p} className="text-base">
+                    {p}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -203,30 +266,36 @@ export function JobBoard({ jobs }: JobBoardProps) {
 
       {filtered.length === 0 ? (
         <p className="text-base text-muted-foreground">
-          No jobs match your filters. Try &quot;All verticals,&quot; &quot;All
-          job types,&quot; or clear the search.
+          No jobs match your filters. Try clearing search or setting filters to
+          &quot;All&quot;.
         </p>
       ) : viewMode === "table" ? (
-        <div className="w-full min-w-0 overflow-hidden rounded-lg border border-border/80 bg-card shadow-sm">
+        <div className="w-full min-w-0 overflow-x-auto overflow-y-visible rounded-lg border border-border/80 bg-card shadow-sm">
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="h-8 w-[20%] py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <TableHead className="h-8 min-w-[8rem] py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Role
                 </TableHead>
-                <TableHead className="h-8 w-[16%] py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <TableHead className="h-8 min-w-[6rem] py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Company
                 </TableHead>
-                <TableHead className="h-8 w-[20%] py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <TableHead className="h-8 min-w-[9rem] py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Location
                 </TableHead>
-                <TableHead className="h-8 w-[16%] py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <TableHead className="h-8 min-w-[5rem] py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Type
                 </TableHead>
-                <TableHead className="h-8 w-[12%] py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <TableHead className="h-8 min-w-[6rem] py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Position
+                </TableHead>
+                <TableHead className="h-8 min-w-[5rem] py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Industry
                 </TableHead>
-                <TableHead className="h-8 w-[16%] py-1.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <TableHead className="h-8 min-w-[6rem] py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Added
+                </TableHead>
+                <TableHead className="h-8 w-[1%] min-w-[4.5rem] py-1.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Apply
                 </TableHead>
               </TableRow>
@@ -240,18 +309,33 @@ export function JobBoard({ jobs }: JobBoardProps) {
                   <TableCell className="whitespace-normal py-1.5 align-top">
                     {job.company}
                   </TableCell>
-                  <TableCell className="whitespace-normal py-1.5 align-top text-muted-foreground [text-wrap:pretty] max-w-xs">
-                    {formatLocations(job.locations)}
+                  <TableCell className="min-w-[9rem] max-w-[14rem] py-1.5 align-top">
+                    <LocationPills locations={job.locations} />
                   </TableCell>
                   <TableCell className="whitespace-nowrap py-1.5 align-top text-muted-foreground">
                     {job.employment_type?.trim() || "—"}
                   </TableCell>
+                  <TableCell className="align-top">
+                    {job.position?.trim() ? (
+                      <Badge
+                        variant="secondary"
+                        className="whitespace-nowrap text-xs"
+                      >
+                        {job.position.trim()}
+                      </Badge>
+                    ) : (
+                      "—"
+                    )}
+                  </TableCell>
                   <TableCell className="whitespace-nowrap py-1.5 align-top">
-                    <Badge variant="secondary" className="text-xs">
+                    <Badge variant="outline" className="text-xs">
                       {job.vertical_tag}
                     </Badge>
                   </TableCell>
-                  <TableCell className="py-1.5 text-right align-top">
+                  <TableCell className="whitespace-nowrap py-1.5 align-top text-xs text-muted-foreground">
+                    {formatAddedAgo(job.created_at)}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap py-1.5 text-right align-top">
                     <Button size="sm" className="text-sm" asChild>
                       <a
                         href={job.application_url}
@@ -278,47 +362,64 @@ export function JobBoard({ jobs }: JobBoardProps) {
             <li key={job.id} className="min-w-0">
               <Card
                 className={cn(
-                  "h-full border-border/80 shadow-md transition-shadow",
-                  "hover:shadow-lg",
+                  "relative flex h-full flex-col border-border/80 shadow-md",
+                  "transition-shadow hover:shadow-lg",
                 )}
               >
-                <CardHeader className="gap-3 px-6 pt-7 pb-2 sm:px-8 sm:pt-8">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <CardTitle className="text-balance pr-1 text-xl font-semibold leading-snug sm:text-2xl">
-                      {job.title}
-                    </CardTitle>
-                    <Badge variant="secondary" className="shrink-0 text-sm">
+                <CardHeader className="space-y-2 px-6 pt-6 sm:px-7 sm:pt-7">
+                  <h2 className="text-balance text-xl font-bold leading-snug text-foreground">
+                    {job.title}
+                  </h2>
+                  <p className="text-base text-muted-foreground">
+                    {job.company}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5 pt-0.5">
+                    <Badge variant="secondary" className="text-sm font-medium">
                       {job.vertical_tag}
                     </Badge>
+                    {job.position?.trim() ? (
+                      <Badge variant="outline" className="text-sm font-medium">
+                        {job.position.trim()}
+                      </Badge>
+                    ) : null}
                   </div>
-                  <CardDescription className="line-clamp-2 text-base font-medium text-foreground/90 sm:text-lg">
-                    {job.company}
-                  </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-3 px-6 text-base text-muted-foreground sm:px-8">
-                  <p className="line-clamp-4 leading-normal">
-                    {formatLocations(job.locations)}
-                  </p>
+                <CardContent className="flex flex-1 flex-col gap-3 px-6 pb-2 text-base sm:px-7">
+                  <div>
+                    <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Locations
+                    </p>
+                    <LocationPills locations={job.locations} />
+                  </div>
                   {job.employment_type != null &&
                   String(job.employment_type).trim() !== "" ? (
                     <p>
-                      <span className="font-medium text-foreground/80">
+                      <span className="font-medium text-foreground/90">
                         Type:{" "}
                       </span>
-                      {String(job.employment_type).trim()}
+                      <span className="text-muted-foreground">
+                        {String(job.employment_type).trim()}
+                      </span>
                     </p>
                   ) : null}
                   {job.compensation != null &&
                   String(job.compensation).trim() !== "" ? (
                     <p>
-                      <span className="font-medium text-foreground/80">
+                      <span className="font-medium text-foreground/90">
                         Compensation:{" "}
                       </span>
-                      {String(job.compensation).trim()}
+                      <span className="text-muted-foreground">
+                        {String(job.compensation).trim()}
+                      </span>
                     </p>
                   ) : null}
                 </CardContent>
-                <CardFooter className="px-6 pb-7 sm:px-8">
+                <div className="px-6 pb-1 sm:px-7">
+                  <p className="text-right text-xs text-muted-foreground">
+                    {formatAddedAgo(job.created_at)}
+                  </p>
+                </div>
+                <CardFooter className="mt-auto flex flex-col gap-0 px-6 pb-6 sm:px-7">
                   <Button
                     asChild
                     className="h-11 w-full text-base font-medium"

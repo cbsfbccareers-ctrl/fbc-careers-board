@@ -9,7 +9,7 @@ export default async function Home() {
   const { data, error } = await supabase
     .from("jobs")
     .select(
-      "id, created_at, title, company, locations, compensation, vertical_tag, employment_type, application_url",
+      "id, created_at, title, company, locations, compensation, vertical_tag, employment_type, position, application_url",
     )
     .eq("status", "Active")
     .gt("expires_at", new Date().toISOString())
@@ -18,7 +18,7 @@ export default async function Home() {
   const jobs = (data as PublicJob[] | null) ?? [];
 
   return (
-    <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-10 sm:px-6">
+    <div className="mx-auto w-full max-w-[100rem] flex-1 px-4 py-10 sm:px-6 lg:px-10 xl:px-12">
       <div className="mb-8 space-y-2">
         <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
           Open roles
