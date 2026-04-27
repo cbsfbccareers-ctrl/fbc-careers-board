@@ -1,39 +1,40 @@
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { supabase } from "@/utils/supabase";
 
-export default function Home() {
+import { JobBoard, type PublicJob } from "@/components/JobBoard";
+
+/** Always fetch fresh listings (not cached from build time). */
+export const dynamic = "force-dynamic";
+
+export default async function Home() {
+  const { data, error } = await supabase
+    .from("jobs")
+    .select(
+      "id, created_at, title, company, locations, compensation, vertical_tag, employment_type, application_url",
+    )
+    .eq("status", "Active")
+    .gt("expires_at", new Date().toISOString())
+    .order("created_at", { ascending: false });
+
+  const jobs = (data as PublicJob[] | null) ?? [];
+
   return (
-    <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-10 sm:px-6">
-      <div className="mb-8 space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+    <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-10 sm:px-6">
+      <div className="mb-8 space-y-2">
+        <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
           Open roles
         </h1>
-        <p className="text-sm text-muted-foreground">
-          Jobs across TradFi, DeFi, crypto, and AI infrastructure. Listings
-          will load from the database in a later phase.
+        <p className="text-base text-muted-foreground max-w-3xl leading-relaxed">
+          Columbia FBC job board: TradFi, DeFi, crypto, and AI infrastructure
+          opportunities. Active listings with future deadlines.
         </p>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">No listings yet</CardTitle>
-            <CardDescription>
-              This grid will show active jobs from Supabase in Phase 4.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Use the admin ingest route to add roles when the pipeline is
-              ready.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      {error ? (
+        <p className="text-base text-destructive">
+          Could not load job listings. Please refresh or try again later.
+        </p>
+      ) : (
+        <JobBoard jobs={jobs} />
+      )}
     </div>
   );
 }
