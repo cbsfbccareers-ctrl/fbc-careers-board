@@ -5,12 +5,13 @@ import { JobBoard, type PublicJob } from "@/components/JobBoard";
 /** Always fetch fresh listings (not cached from build time). */
 export const dynamic = "force-dynamic";
 
+const JOB_COLUMNS =
+  "id, status, created_at, title, company, locations, compensation, vertical_tag, employment_type, position, application_url, application_deadline, expires_at, original_posted_date, visa_sponsorship";
+
 export default async function Home() {
   const { data, error } = await supabase
     .from("jobs")
-    .select(
-      "id, created_at, title, company, locations, compensation, vertical_tag, employment_type, position, application_url",
-    )
+    .select(JOB_COLUMNS)
     .eq("status", "Active")
     .gt("expires_at", new Date().toISOString())
     .order("created_at", { ascending: false });
