@@ -100,6 +100,10 @@ type JobBoardProps = {
 
 const FILTER_ALL = "all" as const;
 
+/** Industry / Job type / Position / View cells: wrap with gap-4 row, min-w-0 prevents grid overflow */
+const FILTER_BAR_COL =
+  "min-w-0 basis-full space-y-2 sm:min-w-[calc(50%-0.5rem)] sm:basis-[calc(50%-0.5rem)] sm:flex-1 xl:min-w-0 xl:basis-[calc((100%-3rem)/4)] xl:max-w-full";
+
 type ViewMode = "grid" | "table";
 
 function toDateInputValue(v: string | null | undefined): string {
@@ -599,11 +603,12 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
 
       <div
         className={cn(
-          "flex flex-col gap-4 rounded-xl border border-border/70 bg-muted/30 p-4 sm:p-5",
+          "flex min-h-0 w-full flex-col gap-4 overflow-visible rounded-xl border border-border/70 bg-muted/30",
+          "p-4 sm:p-5",
           "shadow-sm",
         )}
       >
-        <div className="space-y-2">
+        <div className="min-w-0 space-y-2">
           <label
             htmlFor="job-search"
             className="text-sm font-medium sm:text-base"
@@ -621,8 +626,8 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
             spellCheck={false}
           />
         </div>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="space-y-2">
+        <div className="flex w-full min-w-0 flex-wrap gap-4">
+          <div className={FILTER_BAR_COL}>
             <p className="text-sm font-medium sm:text-base">Industry</p>
             <Select value={industryFilter} onValueChange={setIndustryFilter}>
               <SelectTrigger
@@ -643,7 +648,7 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-2">
+          <div className={FILTER_BAR_COL}>
             <p className="text-sm font-medium sm:text-base">Job type</p>
             <Select
               value={employmentFilter}
@@ -667,7 +672,7 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-2">
+          <div className={FILTER_BAR_COL}>
             <p className="text-sm font-medium sm:text-base">Position</p>
             <Select value={positionFilter} onValueChange={setPositionFilter}>
               <SelectTrigger
@@ -688,11 +693,11 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-2">
+          <div className={FILTER_BAR_COL}>
             <p className="text-sm font-medium sm:text-base">View</p>
-            <div className="flex h-10 min-h-10 w-full min-w-0 items-center gap-2">
+            <div className="flex min-h-[2.5rem] w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-3">
               {isAdmin ? (
-                <div className="flex h-10 min-h-10 shrink-0 items-center gap-2 rounded-md border border-input bg-background px-2.5 text-sm min-[500px]:px-3 min-[500px]:text-base">
+                <div className="flex h-10 shrink-0 items-center gap-2 self-center rounded-md border border-input bg-background px-2.5 text-sm min-[500px]:px-3 min-[500px]:text-base">
                   <Switch
                     id="show-archived"
                     className="shrink-0"
@@ -709,8 +714,8 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
                 </div>
               ) : (
                 <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="flex h-10 min-h-10 shrink-0 cursor-not-allowed items-center gap-2 rounded-md border border-input bg-background/80 px-2.5 text-sm opacity-50 min-[500px]:px-3 min-[500px]:text-base">
+                    <TooltipTrigger asChild>
+                    <div className="flex h-10 shrink-0 cursor-not-allowed items-center gap-2 self-center rounded-md border border-input bg-background/80 px-2.5 text-sm opacity-50 min-[500px]:px-3 min-[500px]:text-base">
                       <Switch
                         id="show-archived"
                         className="shrink-0"
@@ -738,12 +743,12 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
                 variant="outline"
                 size="lg"
                 spacing={0}
-                className="h-10 min-h-10 min-w-0 flex-1 min-[500px]:w-auto min-[500px]:flex-none"
+                className="h-10 min-h-10 w-full max-w-full min-w-0 flex-1 basis-full sm:flex-1 sm:basis-auto"
               >
                 <ToggleGroupItem
                   value="grid"
                   aria-label="Grid view"
-                  className="h-10 min-h-0 min-w-0 flex-1 gap-2 text-base data-[state=on]:bg-accent min-[500px]:flex-initial"
+                  className="min-h-10 flex-1 min-w-0 gap-2 text-base data-[state=on]:bg-accent sm:flex-initial sm:justify-center"
                 >
                   <LayoutGrid className="size-4 shrink-0" />
                   <span className="whitespace-nowrap">Grid</span>
@@ -751,7 +756,7 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
                 <ToggleGroupItem
                   value="table"
                   aria-label="Table view"
-                  className="h-10 min-h-0 min-w-0 flex-1 gap-2 text-base data-[state=on]:bg-accent min-[500px]:flex-initial"
+                  className="min-h-10 flex-1 min-w-0 gap-2 text-base data-[state=on]:bg-accent sm:flex-initial sm:justify-center"
                 >
                   <Table2 className="size-4 shrink-0" />
                   <span className="whitespace-nowrap">Table</span>
