@@ -62,6 +62,7 @@ Phase 3: The Copilot Ingestion Pipeline (Human-in-the-Loop)
 - The UI review form MUST include all extracted fields, including an editable HTML date-picker for expires_at so the admin can manually override the deadline.
 - User clicks 'Save to Database' to execute Supabase insert from the client.
 - Handle unique URL constraints gracefully (toast error).
+- Shadow Logging: When saving the final reviewed job to Supabase, capture the exact, unedited JSON payload originally returned by the AI and save it to the 'raw_ai_output' column.
 
 Phase 4: Public Job Board & Filtering (Frontend)
 Build the UI for the / route using a responsive grid of shadcn Cards to display jobs.

@@ -53,6 +53,9 @@ type ApiIngestResult = {
   error?: string;
 } & ReviewForm & { expires_at: string };
 
+/** Exact JSON body from a successful POST /api/ingest (shadow log / audit). */
+type RawAiSnapshot = Record<string, unknown>;
+
 function isoToDateInputValue(iso: string): string {
   try {
     return new Date(iso).toISOString().slice(0, 10);
@@ -82,11 +85,15 @@ export default function AdminIngestPage() {
   const [scanning, setScanning] = useState(false);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<ReviewForm | null>(null);
+  const [rawAiSnapshot, setRawAiSnapshot] = useState<RawAiSnapshot | null>(
+    null,
+  );
 
   async function handleScan(e: React.FormEvent) {
     e.preventDefault();
     setScanning(true);
     setResult(null);
+    setRawAiSnapshot(null);
     const usingRawPasted = rawTextFallback.trim().length > 0;
     try {
       const payload: { url: string; rawText?: string } = {
@@ -109,6 +116,10 @@ export default function AdminIngestPage() {
         }
         return;
       }
+      const snapshot: RawAiSnapshot = JSON.parse(
+        JSON.stringify(data),
+      ) as RawAiSnapshot;
+      setRawAiSnapshot(snapshot);
       setShowFallback(false);
       setRawTextFallback("");
       setResult({
@@ -207,6 +218,7 @@ export default function AdminIngestPage() {
         application_url: applicationUrl,
         status: "Active",
         expires_at: dateInputToIsoTimestamptz(result.expires_at),
+        raw_ai_output: rawAiSnapshot,
       });
 
       if (error) {
@@ -221,6 +233,7 @@ export default function AdminIngestPage() {
       }
       toast.success("Job saved.");
       setResult(null);
+      setRawAiSnapshot(null);
       setUrl("");
       setRawTextFallback("");
       setShowFallback(false);
@@ -589,6 +602,7 @@ export default function AdminIngestPage() {
                   disabled={saving}
                   onClick={() => {
                     setResult(null);
+                    setRawAiSnapshot(null);
                     setRawTextFallback("");
                     setShowFallback(false);
                   }}
