@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { LayoutGrid, MoreVertical, Plus, Table2, Trash2 } from "lucide-react";
 
 import {
+  deleteJob,
   getJobsList,
   setJobStatus,
   updateJobFromBoard,
@@ -21,6 +22,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -97,6 +99,15 @@ export type PublicJob = {
 type JobBoardProps = {
   jobs: PublicJob[];
 };
+
+/** True when expires_at has passed — greys out card/row styling when visible. */
+function isJobExpiredForDisplay(job: PublicJob): boolean {
+  if (job.expires_at == null || String(job.expires_at).trim() === "") {
+    return false;
+  }
+  const t = Date.parse(job.expires_at);
+  return !Number.isNaN(t) && t < Date.now();
+}
 
 const FILTER_ALL = "all" as const;
 
@@ -185,6 +196,7 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
   const { isAdmin } = useAdmin();
   const [listJobs, setListJobs] = useState<PublicJob[]>(initialFromServer);
   const [showArchived, setShowArchived] = useState(false);
+  const [showExpired, setShowExpired] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [industryFilter, setIndustryFilter] = useState<string>(FILTER_ALL);
   const [employmentFilter, setEmploymentFilter] = useState<string>(FILTER_ALL);
@@ -196,6 +208,7 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
   const [saveLoading, setSaveLoading] = useState(false);
 
   const [archiveTarget, setArchiveTarget] = useState<PublicJob | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<PublicJob | null>(null);
 
   useEffect(() => {
     if (isAdmin) return;
@@ -206,11 +219,27 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
   }, [isAdmin]);
 
   useEffect(() => {
-    if (!isAdmin) return;
     let cancelled = false;
     (async () => {
+      if (!isAdmin) {
+        const { data, error } = await getJobsList({
+          status: "Active",
+          includeExpired: showExpired,
+        });
+        if (cancelled) return;
+        if (error) {
+          toast.error(error);
+          return;
+        }
+        if (data) {
+          setListJobs(data as PublicJob[]);
+        }
+        return;
+      }
+
       const { data, error } = await getJobsList({
         status: showArchived ? "Archived" : "Active",
+        includeExpired: showArchived ? true : showExpired,
       });
       if (cancelled) return;
       if (error) {
@@ -224,9 +253,9 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
     return () => {
       cancelled = true;
     };
-  }, [isAdmin, showArchived]);
+  }, [isAdmin, showArchived, showExpired]);
 
-  const displayJobs = isAdmin ? listJobs : initialFromServer;
+  const displayJobs = listJobs;
 
   function openEdit(job: PublicJob) {
     setEditJob(job);
@@ -324,6 +353,7 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
     setArchiveTarget(null);
     const { data: fresh, error: fetchErr } = await getJobsList({
       status: showArchived ? "Archived" : "Active",
+      includeExpired: showArchived ? true : showExpired,
     });
     if (fetchErr) {
       toast.error(fetchErr);
@@ -333,7 +363,20 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
     toast.success(next === "Archived" ? "Job archived" : "Job reactivated");
   }
 
-  if (!isAdmin && initialFromServer.length === 0) {
+  async function confirmDeleteJob() {
+    if (!deleteTarget) return;
+    const id = deleteTarget.id;
+    const { error } = await deleteJob(id);
+    if (error) {
+      toast.error(error);
+      return;
+    }
+    setDeleteTarget(null);
+    setListJobs((prev) => prev.filter((j) => j.id !== id));
+    toast.success("Job permanently deleted");
+  }
+
+  if (!isAdmin && listJobs.length === 0) {
     return (
       <p className="text-base text-muted-foreground">
         No open roles at the moment. Check back soon.
@@ -601,6 +644,35 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
         </AlertDialogContent>
       </AlertDialog>
 
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => {
+          if (!o) setDeleteTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Permanently delete this job?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure? This will permanently delete the job and its
+              history. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              type="button"
+              onClick={() => {
+                void confirmDeleteJob();
+              }}
+            >
+              Delete permanently
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <div
         className={cn(
           "flex min-h-0 w-full flex-col gap-4 overflow-visible rounded-xl border border-border/70 bg-muted/30",
@@ -734,6 +806,21 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
                   </TooltipContent>
                 </Tooltip>
               )}
+              <div className="flex h-10 shrink-0 items-center gap-2 self-center rounded-md border border-input bg-background px-2.5 text-sm min-[500px]:px-3 min-[500px]:text-base">
+                <Switch
+                  id="show-expired"
+                  className="shrink-0"
+                  checked={showExpired}
+                  onCheckedChange={setShowExpired}
+                  aria-label="Show expired job listings"
+                />
+                <label
+                  htmlFor="show-expired"
+                  className="cursor-pointer whitespace-nowrap leading-none text-muted-foreground"
+                >
+                  Show expired
+                </label>
+              </div>
               <ToggleGroup
                 type="single"
                 value={viewMode}
@@ -815,14 +902,23 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((job) => (
-                <TableRow key={job.id} className="text-sm">
+              {filtered.map((job) => {
+                const ghostVacancy = isJobExpiredForDisplay(job);
+                return (
+                  <TableRow
+                    key={job.id}
+                    className={cn(
+                      "text-sm",
+                      ghostVacancy && "bg-muted/20 opacity-60 grayscale",
+                    )}
+                  >
                   {isAdmin && (
                     <TableCell className="p-1 align-top">
                       <RowActions
                         job={job}
                         onEdit={() => openEdit(job)}
                         onArchive={() => setArchiveTarget(job)}
+                        onDelete={() => setDeleteTarget(job)}
                       />
                     </TableCell>
                   )}
@@ -859,18 +955,26 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
                     {formatAddedAgo(job.created_at)}
                   </TableCell>
                   <TableCell className="whitespace-nowrap py-1.5 text-right align-top">
-                    <Button size="sm" className="text-sm" asChild>
+                    <Button
+                      size="sm"
+                      className="text-sm"
+                      variant={
+                        ghostVacancy ? "secondary" : "default"
+                      }
+                      asChild
+                    >
                       <a
                         href={job.application_url}
                         target="_blank"
                         rel="noopener noreferrer"
                       >
-                        Apply
+                        {ghostVacancy ? "Go to Expired Link" : "Apply"}
                       </a>
                     </Button>
                   </TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         </div>
@@ -883,13 +987,18 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
             "grid-cols-1 md:grid-cols-2 xl:grid-cols-3",
           )}
         >
-          {filtered.map((job) => (
+          {filtered.map((job) => {
+            const ghostVacancy = isJobExpiredForDisplay(job);
+            return (
             <li key={job.id} className="min-w-0">
               <Card
                 className={cn(
                   "relative flex h-full flex-col border-border/80 shadow-md",
                   "transition-shadow hover:shadow-lg",
-                  job.status === "Archived" && "opacity-90",
+                  !ghostVacancy &&
+                    job.status === "Archived" &&
+                    "opacity-90",
+                  ghostVacancy && "opacity-60 grayscale hover:opacity-65",
                 )}
               >
                 {isAdmin && (
@@ -898,6 +1007,7 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
                       job={job}
                       onEdit={() => openEdit(job)}
                       onArchive={() => setArchiveTarget(job)}
+                      onDelete={() => setDeleteTarget(job)}
                     />
                   </div>
                 )}
@@ -965,22 +1075,27 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
                 <CardFooter className="mt-auto flex flex-col gap-0 px-6 pb-6 sm:px-7">
                   <Button
                     asChild
-                    className="h-11 w-full text-base font-medium"
+                    className={cn(
+                      "h-11 w-full text-base font-medium",
+                      ghostVacancy &&
+                        "border border-input shadow-none",
+                    )}
                     size="default"
-                    variant="default"
+                    variant={ghostVacancy ? "secondary" : "default"}
                   >
                     <a
                       href={job.application_url}
                       target="_blank"
                       rel="noopener noreferrer"
                     >
-                      Apply Now
+                      {ghostVacancy ? "Go to Expired Link" : "Apply Now"}
                     </a>
                   </Button>
                 </CardFooter>
               </Card>
             </li>
-          ))}
+            );
+          })}
         </ul>
       ) : null}
     </div>
@@ -991,10 +1106,12 @@ function RowActions({
   job,
   onEdit,
   onArchive,
+  onDelete,
 }: {
   job: PublicJob;
   onEdit: () => void;
   onArchive: () => void;
+  onDelete: () => void;
 }) {
   const archived = job.status === "Archived";
   return (
@@ -1014,6 +1131,10 @@ function RowActions({
         <DropdownMenuItem onSelect={onEdit}>Edit</DropdownMenuItem>
         <DropdownMenuItem onSelect={onArchive}>
           {archived ? "Unarchive" : "Archive"}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem variant="destructive" onSelect={onDelete}>
+          Delete
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

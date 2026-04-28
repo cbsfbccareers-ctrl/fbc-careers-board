@@ -24,15 +24,18 @@ export type JobListStatus = "Active" | "Archived";
 
 export async function getJobsList({
   status,
+  includeExpired = false,
 }: {
   status: JobListStatus;
+  /** When status is Active: false = only expires_at in the future (default). */
+  includeExpired?: boolean;
 }): Promise<{ data: unknown[] | null; error: string | null }> {
   let q = supabase
     .from("jobs")
     .select(SELECT_COLUMNS)
     .eq("status", status);
 
-  if (status === "Active") {
+  if (status === "Active" && !includeExpired) {
     q = q.gt("expires_at", new Date().toISOString());
   }
 
@@ -91,4 +94,12 @@ export async function setJobStatus(
     .single();
 
   return { data, error: error?.message ?? null };
+}
+
+export async function deleteJob(
+  id: string,
+): Promise<{ error: string | null }> {
+  const { error } = await supabase.from("jobs").delete().eq("id", id);
+
+  return { error: error?.message ?? null };
 }
