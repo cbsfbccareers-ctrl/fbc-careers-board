@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { useRef, useState } from "react";
+import { Loader2, Plus, Trash2, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -13,8 +13,10 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { extractTextFromPdfFile } from "@/lib/extract-pdf-text";
 import { cn } from "@/lib/utils";
 import {
   EMPLOYMENT_TYPES,
@@ -49,12 +51,24 @@ type ReviewForm = {
   original_posted_date: string;
   application_deadline: string;
   application_url: string;
+  application_email: string;
+  application_instructions: string;
   expires_at: string;
 };
 
 type ApiIngestResult = {
   error?: string;
+  code?: string;
 } & ReviewForm & { expires_at: string };
+
+type ManualApplyMode = "link" | "email";
+
+type ManualRoutingPayload = {
+  applyMode?: ManualApplyMode;
+  linkUrl?: string;
+  applyEmail?: string;
+  instructions?: string;
+};
 
 /** Exact JSON body from a successful POST /api/ingest (shadow log / audit). */
 type RawAiSnapshot = Record<string, unknown>;
@@ -106,11 +120,21 @@ function isExpiryCalendarDateBeforeToday(ymd: string): boolean {
 }
 
 export default function AdminIngestPage() {
+  const pdfInputRef = useRef<HTMLInputElement>(null);
+
+  const [intakeTab, setIntakeTab] = useState<"scan" | "pdf" | "manual">(
+    "scan",
+  );
   const [url, setUrl] = useState("");
-  const [manualUrl, setManualUrl] = useState("");
-  const [manualRawText, setManualRawText] = useState("");
-  const [rawTextFallback, setRawTextFallback] = useState("");
-  const [showFallback, setShowFallback] = useState(false);
+  const [manualRawJobText, setManualRawJobText] = useState("");
+  const [manualApplyMode, setManualApplyMode] = useState<ManualApplyMode>(
+    "link",
+  );
+  const [manualLinkUrl, setManualLinkUrl] = useState("");
+  const [manualApplyEmail, setManualApplyEmail] = useState("");
+  const [manualApplyInstructions, setManualApplyInstructions] = useState("");
+  const [pdfDragging, setPdfDragging] = useState(false);
+
   const [scanning, setScanning] = useState(false);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<ReviewForm | null>(null);
@@ -119,11 +143,14 @@ export default function AdminIngestPage() {
   );
 
   function resetIngestionState() {
+    setIntakeTab("scan");
     setUrl("");
-    setManualUrl("");
-    setManualRawText("");
-    setRawTextFallback("");
-    setShowFallback(false);
+    setManualRawJobText("");
+    setManualApplyMode("link");
+    setManualLinkUrl("");
+    setManualApplyEmail("");
+    setManualApplyInstructions("");
+    setPdfDragging(false);
     setScanning(false);
     setSaving(false);
     setResult(null);
@@ -136,10 +163,10 @@ export default function AdminIngestPage() {
       JSON.stringify(data),
     ) as RawAiSnapshot;
     setRawAiSnapshot(snapshot);
-    setShowFallback(false);
-    setRawTextFallback("");
-    setManualUrl("");
-    setManualRawText("");
+    setManualRawJobText("");
+    setManualLinkUrl("");
+    setManualApplyEmail("");
+    setManualApplyInstructions("");
     setResult({
       title: data.title,
       company: data.company,
@@ -148,12 +175,45 @@ export default function AdminIngestPage() {
       position: data.position,
       vertical_tag: data.vertical_tag,
       visa_sponsorship: data.visa_sponsorship,
-      compensation: data.compensation,
+      compensation: data.compensation ?? "",
       original_posted_date: tryNormalizeDateInput(data.original_posted_date),
       application_deadline: tryNormalizeDateInput(data.application_deadline),
-      application_url: data.application_url,
+      application_url: data.application_url ?? "",
+      application_email: data.application_email ?? "",
+      application_instructions: data.application_instructions ?? "",
       expires_at: isoToDateInputValue(data.expires_at),
     });
+  }
+
+  async function fetchIngestParse(
+    payload: Record<string, unknown>,
+  ): Promise<boolean> {
+    const res = await fetch("/api/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = (await res.json()) as ApiIngestResult;
+    if (!res.ok) {
+      toast.error(data.error ?? "Request failed");
+      return false;
+    }
+    applyIngestExtract(data);
+    return true;
+  }
+
+  async function ingestPost(payload: Record<string, unknown>): Promise<boolean> {
+    setScanning(true);
+    setResult(null);
+    setRawAiSnapshot(null);
+    try {
+      return await fetchIngestParse(payload);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Network error");
+      return false;
+    } finally {
+      setScanning(false);
+    }
   }
 
   async function handleScan(e: React.FormEvent) {
@@ -167,26 +227,21 @@ export default function AdminIngestPage() {
     setScanning(true);
     setResult(null);
     setRawAiSnapshot(null);
-    const usingRawPasted = rawTextFallback.trim().length > 0;
     try {
-      const payload: { url: string; rawText?: string } = {
-        url: href,
-      };
-      if (usingRawPasted) {
-        payload.rawText = rawTextFallback.trim();
-      }
       const res = await fetch("/api/ingest", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          url: href,
+          intakeSource: "scan-jina",
+        }),
       });
       const data = (await res.json()) as ApiIngestResult;
       if (!res.ok) {
-        if (!usingRawPasted) {
-          setShowFallback(true);
-        } else {
-          toast.error(data.error ?? "Scan failed");
-        }
+        toast.error(data.error ?? "Scan failed — try manual entry or PDF.");
+        setManualApplyMode("link");
+        setManualLinkUrl(url.trim());
+        setIntakeTab("manual");
         return;
       }
       applyIngestExtract(data);
@@ -197,39 +252,91 @@ export default function AdminIngestPage() {
     }
   }
 
-  async function handleManualExtract(e: React.FormEvent) {
-    e.preventDefault();
-    const href = parseValidApplicationUrl(manualUrl);
-    if (!href) {
-      toast.error("Enter a valid http or https application URL.");
+  async function handlePdfFileSelected(file: File) {
+    if (
+      !file.name.toLowerCase().endsWith(".pdf") &&
+      file.type !== "application/pdf"
+    ) {
+      toast.error("Choose a PDF file.");
       return;
     }
-    const rawText = manualRawText.trim();
+    setScanning(true);
+    setResult(null);
+    setRawAiSnapshot(null);
+    try {
+      const rawText = await extractTextFromPdfFile(file);
+      if (!rawText.trim()) {
+        toast.error("No extractable text in this PDF.");
+        return;
+      }
+      await fetchIngestParse({
+        rawText,
+        intakeSource: "pdf",
+        documentLabel: file.name,
+      });
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Could not read this PDF.",
+      );
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  function handlePdfDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setPdfDragging(true);
+  }
+
+  function handlePdfDragLeave(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setPdfDragging(false);
+  }
+
+  function handlePdfDrop(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setPdfDragging(false);
+    const f = e.dataTransfer.files?.[0];
+    if (f) void handlePdfFileSelected(f);
+  }
+
+  async function handleManualExtract(e: React.FormEvent) {
+    e.preventDefault();
+    const rawText = manualRawJobText.trim();
     if (!rawText) {
       toast.error("Paste the job posting text.");
       return;
     }
 
-    setScanning(true);
-    setResult(null);
-    setRawAiSnapshot(null);
-    try {
-      const res = await fetch("/api/ingest", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: href, rawText }),
-      });
-      const data = (await res.json()) as ApiIngestResult;
-      if (!res.ok) {
-        toast.error(data.error ?? "Extraction failed");
+    let manualRouting: ManualRoutingPayload | undefined;
+    if (manualApplyMode === "link") {
+      const href = parseValidApplicationUrl(manualLinkUrl);
+      if (!href) {
+        toast.error("Enter a valid http(s) URL for applying.");
         return;
       }
-      applyIngestExtract(data);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Network error");
-    } finally {
-      setScanning(false);
+      manualRouting = { applyMode: "link", linkUrl: href };
+    } else {
+      const em = manualApplyEmail.trim();
+      if (!em || !em.includes("@")) {
+        toast.error("Enter a valid email address.");
+        return;
+      }
+      manualRouting = {
+        applyMode: "email",
+        applyEmail: em,
+        instructions: manualApplyInstructions.trim() || undefined,
+      };
     }
+
+    await ingestPost({
+      rawText,
+      intakeSource: "manual",
+      manualRouting,
+    });
   }
 
   function updateField<K extends keyof ReviewForm>(key: K, value: ReviewForm[K]) {
@@ -281,20 +388,46 @@ export default function AdminIngestPage() {
       return;
     }
 
-    setSaving(true);
-    try {
-      let applicationUrl: string;
+    const emailTrim = result.application_email.trim();
+    const urlTrim = result.application_url.trim();
+
+    let applicationEmail: string | null = null;
+    let applicationUrl: string | null = null;
+    let applicationInstructions: string | null =
+      result.application_instructions.trim() || null;
+
+    if (emailTrim) {
+      if (!emailTrim.includes("@")) {
+        toast.error("Application email does not look valid.");
+        return;
+      }
+      applicationEmail = emailTrim.toLowerCase();
+      applicationUrl = null;
+      if (!applicationInstructions) {
+        applicationInstructions = null;
+      }
+    } else if (urlTrim) {
       try {
-        const u = new URL(result.application_url.trim());
+        const u = new URL(urlTrim.trim());
         if (u.protocol !== "http:" && u.protocol !== "https:") {
           throw new Error("invalid");
         }
         applicationUrl = u.href;
+        applicationEmail = null;
       } catch {
         toast.error("Application URL must be a valid http or https link.");
         return;
       }
+      applicationInstructions = null;
+    } else {
+      toast.error(
+        "Provide either an application URL or an application email.",
+      );
+      return;
+    }
 
+    setSaving(true);
+    try {
       const { error } = await supabase.from("jobs").insert({
         title: result.title.trim(),
         company: result.company.trim(),
@@ -307,6 +440,8 @@ export default function AdminIngestPage() {
         original_posted_date: result.original_posted_date.trim() || null,
         application_deadline: result.application_deadline.trim() || null,
         application_url: applicationUrl,
+        application_email: applicationEmail,
+        application_instructions: applicationInstructions,
         status: "Active",
         expires_at: dateInputToIsoTimestamptz(result.expires_at),
         raw_ai_output: rawAiSnapshot,
@@ -315,7 +450,7 @@ export default function AdminIngestPage() {
       if (error) {
         if (error.code === "23505") {
           toast.error(
-            "This job is already in the database (duplicate application URL).",
+            "This job is already in the database (possible duplicate posting).",
           );
         } else {
           toast.error(error.message);
@@ -323,13 +458,7 @@ export default function AdminIngestPage() {
         return;
       }
       toast.success("Job saved.");
-      setResult(null);
-      setRawAiSnapshot(null);
-      setUrl("");
-      setManualUrl("");
-      setManualRawText("");
-      setRawTextFallback("");
-      setShowFallback(false);
+      resetIngestionState();
     } finally {
       setSaving(false);
     }
@@ -341,14 +470,19 @@ export default function AdminIngestPage() {
         <CardHeader>
           <CardTitle>Ingest job</CardTitle>
           <CardDescription>
-            Scan a posting URL or paste raw text. Review every field, then save
-            to the database.
+            Scan a URL, extract from a PDF in the browser, or paste manually.
+            Review every field, then save.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-8">
-          <Tabs defaultValue="scan" className="w-full gap-4">
-            <TabsList className="grid h-auto w-full grid-cols-2 sm:max-w-md">
+          <Tabs
+            value={intakeTab}
+            onValueChange={(v) => setIntakeTab(v as "scan" | "pdf" | "manual")}
+            className="w-full gap-4"
+          >
+            <TabsList className="grid h-auto w-full grid-cols-3 sm:max-w-xl">
               <TabsTrigger value="scan">Scan Link</TabsTrigger>
+              <TabsTrigger value="pdf">Upload PDF</TabsTrigger>
               <TabsTrigger value="manual">Manual Entry</TabsTrigger>
             </TabsList>
             <TabsContent value="scan" className="mt-4 space-y-4 outline-none">
@@ -368,56 +502,11 @@ export default function AdminIngestPage() {
                     autoComplete="url"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Must be a valid <span className="font-mono">http</span> or{" "}
-                    <span className="font-mono">https</span> URL.
+                    Must be <span className="font-mono">http</span> or{" "}
+                    <span className="font-mono">https</span>. If scanning is
+                    blocked, switch to Manual Entry or PDF.
                   </p>
                 </div>
-                {showFallback && (
-                  <div
-                    className={cn(
-                      "space-y-3 animate-in fade-in-0 slide-in-from-top-2 duration-300",
-                    )}
-                  >
-                    <div
-                      role="status"
-                      className={cn(
-                        "rounded-lg border p-4 text-sm leading-relaxed shadow-sm",
-                        "border-sky-200 bg-sky-50 text-sky-950",
-                        "dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100",
-                      )}
-                    >
-                      Looks like this company&apos;s security blocked our
-                      automated scanner. Please press{" "}
-                      <kbd className="font-mono text-xs">Cmd+A</kbd> /{" "}
-                      <kbd className="font-mono text-xs">Ctrl+A</kbd> on the job
-                      page to copy all the text, and paste it here to continue.
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="raw-job-fallback">
-                        Raw job description (fallback)
-                      </Label>
-                      <Textarea
-                        id="raw-job-fallback"
-                        className="min-h-32 resize-y text-sm"
-                        name="rawText"
-                        value={rawTextFallback}
-                        onChange={(e) => setRawTextFallback(e.target.value)}
-                        disabled={scanning}
-                        autoComplete="off"
-                        placeholder="Paste full job text…"
-                      />
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 pt-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={resetIngestionState}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                )}
                 <div className="flex flex-wrap items-center gap-2">
                   <Button
                     type="submit"
@@ -437,56 +526,166 @@ export default function AdminIngestPage() {
                 </div>
               </form>
             </TabsContent>
-            <TabsContent value="manual" className="mt-4 outline-none">
-              <form
-                onSubmit={handleManualExtract}
-                className="space-y-4"
-              >
-                <div className="space-y-2">
-                  <Label htmlFor="manual-application-url">
-                    Application URL
-                  </Label>
-                  <Input
-                    id="manual-application-url"
-                    type="url"
-                    name="manual-url"
-                    inputMode="url"
-                    placeholder="https://..."
-                    value={manualUrl}
-                    onChange={(e) => setManualUrl(e.target.value)}
-                    required
-                    disabled={scanning}
-                    autoComplete="url"
+            <TabsContent value="pdf" className="mt-4 outline-none">
+              <div className="space-y-4">
+                <input
+                  ref={pdfInputRef}
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = "";
+                    if (f) void handlePdfFileSelected(f);
+                  }}
+                />
+                <div
+                  onDragEnter={handlePdfDragOver}
+                  onDragLeave={handlePdfDragLeave}
+                  onDragOver={handlePdfDragOver}
+                  onDrop={handlePdfDrop}
+                  role="presentation"
+                  className={cn(
+                    "rounded-lg border-2 border-dashed px-6 py-10 text-center transition-colors",
+                    pdfDragging ? "border-primary bg-primary/5" : "border-border",
+                  )}
+                >
+                  <Upload
+                    className="mx-auto size-10 text-muted-foreground"
+                    aria-hidden
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Paste the primary apply link. Must be{" "}
-                    <span className="font-mono">http</span> or{" "}
-                    <span className="font-mono">https</span>.
+                  <p className="mt-3 text-sm font-medium">
+                    Drag and drop a job posting PDF here
                   </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Text is extracted in your browser only — the file is not
+                    uploaded to our servers.
+                  </p>
+                  <Button
+                    type="button"
+                    className="mt-4"
+                    variant="secondary"
+                    disabled={scanning}
+                    onClick={() => pdfInputRef.current?.click()}
+                  >
+                    {scanning ? (
+                      <>
+                        <Loader2 className="size-4 animate-spin" aria-hidden />
+                        Extracting
+                      </>
+                    ) : (
+                      "Choose PDF"
+                    )}
+                  </Button>
                 </div>
+              </div>
+            </TabsContent>
+            <TabsContent value="manual" className="mt-4 outline-none">
+              <form onSubmit={handleManualExtract} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="manual-raw-text">Raw text</Label>
+                  <Label htmlFor="manual-raw-job">Raw job description</Label>
                   <Textarea
-                    id="manual-raw-text"
-                    className="min-h-56 resize-y text-sm"
-                    placeholder="Paste the complete job posting (HTML/plain text)."
-                    value={manualRawText}
-                    onChange={(e) => setManualRawText(e.target.value)}
+                    id="manual-raw-job"
+                    className="min-h-52 resize-y text-sm"
+                    placeholder="Paste the complete job posting text."
+                    value={manualRawJobText}
+                    onChange={(e) => setManualRawJobText(e.target.value)}
                     disabled={scanning}
                     spellCheck={true}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Bypasses automated scanning — text is sent directly to the
-                    AI extractor together with your URL.
-                  </p>
                 </div>
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium">
+                    How should students apply?
+                  </Label>
+                  <RadioGroup
+                    value={manualApplyMode}
+                    onValueChange={(v) =>
+                      setManualApplyMode(v as ManualApplyMode)
+                    }
+                    className="gap-4 sm:flex-row"
+                    disabled={scanning}
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem id="manual-apply-link" value="link" />
+                      <Label
+                        htmlFor="manual-apply-link"
+                        className="cursor-pointer font-normal"
+                      >
+                        Link
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem id="manual-mode-email" value="email" />
+                      <Label
+                        htmlFor="manual-mode-email"
+                        className="cursor-pointer font-normal"
+                      >
+                        Direct Email
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+                {manualApplyMode === "link" ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="manual-link-url">
+                      Application URL (link)
+                    </Label>
+                    <Input
+                      id="manual-link-url"
+                      type="url"
+                      inputMode="url"
+                      placeholder="https://..."
+                      value={manualLinkUrl}
+                      onChange={(e) => setManualLinkUrl(e.target.value)}
+                      disabled={scanning}
+                      autoComplete="url"
+                    />
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="manual-email-address">
+                        Email address
+                      </Label>
+                      <Input
+                        id="manual-email-address"
+                        type="email"
+                        inputMode="email"
+                        autoComplete="email"
+                        placeholder="careers@company.com"
+                        value={manualApplyEmail}
+                        onChange={(e) =>
+                          setManualApplyEmail(e.target.value)
+                        }
+                        disabled={scanning}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="manual-apply-special">
+                        Special instructions (optional)
+                      </Label>
+                      <Input
+                        id="manual-apply-special"
+                        placeholder="Subject line, attachments, naming…"
+                        value={manualApplyInstructions}
+                        onChange={(e) =>
+                          setManualApplyInstructions(e.target.value)
+                        }
+                        disabled={scanning}
+                      />
+                    </div>
+                  </div>
+                )}
                 <div className="flex flex-wrap items-center gap-2 pt-2">
                   <Button
                     type="submit"
                     disabled={
                       scanning ||
-                      parseValidApplicationUrl(manualUrl) === null ||
-                      !manualRawText.trim()
+                      !manualRawJobText.trim() ||
+                      (manualApplyMode === "link"
+                        ? parseValidApplicationUrl(manualLinkUrl) === null
+                        : manualApplyEmail.trim().length === 0)
                     }
                   >
                     {scanning ? (
@@ -719,21 +918,65 @@ export default function AdminIngestPage() {
                   <span className="font-medium">Expires at</span> below.
                 </p>
               </div>
-              <div className="space-y-2">
-                <label htmlFor="application_url" className="text-sm font-medium">
-                  Application URL
-                </label>
-                <Input
-                  id="application_url"
-                  type="url"
-                  value={result.application_url}
-                  onChange={(e) =>
-                    updateField("application_url", e.target.value)
-                  }
-                  required
-                  disabled={saving}
-                />
-              </div>
+              {result.application_email.trim().length > 0 ? (
+                <div className="space-y-4 rounded-lg border border-border/80 bg-muted/20 p-4">
+                  <p className="text-sm font-medium">Application (email)</p>
+                  <div className="space-y-2">
+                    <Label htmlFor="review-application-email">
+                      Email address
+                    </Label>
+                    <Input
+                      id="review-application-email"
+                      type="email"
+                      autoComplete="email"
+                      inputMode="email"
+                      value={result.application_email}
+                      onChange={(e) =>
+                        updateField("application_email", e.target.value)
+                      }
+                      disabled={saving}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="review-application-instructions">
+                      Special instructions (optional)
+                    </Label>
+                    <Input
+                      id="review-application-instructions"
+                      value={result.application_instructions}
+                      onChange={(e) =>
+                        updateField(
+                          "application_instructions",
+                          e.target.value,
+                        )
+                      }
+                      placeholder="Subject line, attachments, etc."
+                      disabled={saving}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="application_url"
+                    className="text-sm font-medium"
+                  >
+                    Application URL
+                  </Label>
+                  <Input
+                    id="application_url"
+                    type="url"
+                    value={result.application_url}
+                    onChange={(e) =>
+                      updateField("application_url", e.target.value)
+                    }
+                    required={
+                      result.application_email.trim().length === 0
+                    }
+                    disabled={saving}
+                  />
+                </div>
+              )}
               <div className="space-y-2">
                 <label htmlFor="expires_at" className="text-sm font-medium">
                   Expires at
@@ -775,13 +1018,9 @@ export default function AdminIngestPage() {
                   onClick={() => {
                     setResult(null);
                     setRawAiSnapshot(null);
-                    setManualUrl("");
-                    setManualRawText("");
-                    setRawTextFallback("");
-                    setShowFallback(false);
                   }}
                 >
-                  Scan another
+                  Intake another
                 </Button>
                 <Button
                   type="button"

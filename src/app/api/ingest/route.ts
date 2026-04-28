@@ -14,7 +14,9 @@ import {
   type VisaSponsorship,
 } from "@/lib/jobs-constants";
 
-const employmentEnum = z.enum(EMPLOYMENT_TYPES as unknown as [EmploymentType, ...EmploymentType[]]);
+const employmentEnum = z.enum(
+  EMPLOYMENT_TYPES as unknown as [EmploymentType, ...EmploymentType[]],
+);
 const positionEnum = z.enum(
   POSITIONS as unknown as [Position, ...Position[]],
 );
@@ -25,46 +27,83 @@ const visaEnum = z.enum(
   VISA_SPONSORSHIP as unknown as [VisaSponsorship, ...VisaSponsorship[]],
 );
 
+const nullableEmail = z
+  .string()
+  .nullable()
+  .describe(
+    "Employer email for applicants if postings say to email a mailbox (e.g. careers@firm.com); null otherwise",
+  );
+
 const jobExtractionSchema = z.object({
-  title: z.string().min(1).describe("The exact job title. Strip out internal requisition numbers or locations (e.g., return 'Product Manager' instead of 'Product Manager - NYC (Req: 123)')."),
-  company: z.string().min(1).describe("The clean company name. Remove 'Inc.', 'LLC', or 'Corporation'."),
+  title: z
+    .string()
+    .min(1)
+    .describe(
+      "The exact job title. Strip out internal requisition numbers or locations.",
+    ),
+  company: z
+    .string()
+    .min(1)
+    .describe("The clean company name. Remove 'Inc.', 'LLC', or 'Corporation'."),
   locations: z
     .array(z.string().min(1))
     .min(1)
     .describe("List of cities. Format as 'City, State' or 'City, Country'."),
   employment_type: employmentEnum.describe("Best match from the allowed enum"),
   position: positionEnum.describe("Best match from the allowed enum"),
-  vertical_tag: verticalEnum.describe("Industry vertical: best match from enum"),
-  visa_sponsorship: visaEnum.describe("Only select Yes or No if explicitly stated in the text. Otherwise, select Unspecified."),
+  vertical_tag: verticalEnum.describe(
+    "Industry vertical: best match from enum",
+  ),
+  visa_sponsorship: visaEnum.describe(
+    "Only select Yes or No if explicitly stated in the text. Otherwise, select Unspecified.",
+  ),
   compensation: z
     .string()
     .nullable()
-    .describe("The salary range, e.g., '$150,000 - $170,000'. Include currency symbols. Return null if not explicitly stated."),
+    .describe(
+      "The salary range, e.g., '$150,000 - $170,000'. Return null if not explicitly stated.",
+    ),
   original_posted_date: z
     .string()
     .nullable()
-    .describe("When the job was posted, e.g., '3 days ago' or 'YYYY-MM-DD'. Return null if not explicitly stated."),
+    .describe(
+      "When the job was posted, e.g., 'YYYY-MM-DD' or human text as given. Return null if not explicitly stated.",
+    ),
   application_deadline: z
     .string()
     .nullable()
-    .describe("The hard deadline to apply in YYYY-MM-DD, if explicitly stated. Do not guess. Return null if not explicitly stated."),
+    .describe(
+      "The hard deadline to apply in YYYY-MM-DD, if explicitly stated. Do not guess. Return null if not explicitly stated.",
+    ),
   application_url: z
     .string()
-    .min(1)
-    .describe("Primary application or apply link; prefer the URL that was fetched when appropriate"),
+    .nullable()
+    .describe(
+      "Primary https link to apply online. Null if applications are email-only.",
+    ),
+  application_email: nullableEmail,
+  application_instructions: z
+    .string()
+    .nullable()
+    .describe(
+      "If apply-by-email is used: subject line requirements, attachments, or wording from the posting. Null if not stated.",
+    ),
 });
 
 export const maxDuration = 60;
 
-function parseToDeadlineDate(
-  value: string | undefined | null,
-): Date | null {
+export type ManualRoutingBody = {
+  applyMode?: "link" | "email";
+  linkUrl?: string;
+  applyEmail?: string;
+  instructions?: string;
+};
+
+function parseToDeadlineDate(value: string | undefined | null): Date | null {
   if (value == null) return null;
   const s = String(value).trim();
   if (s.length === 0) return null;
-  const isoDay = s.match(
-    /^(\d{4})-(\d{2})-(\d{2})(?:$|[T\s])/,
-  );
+  const isoDay = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:$|[T\s])/);
   if (isoDay) {
     const y = Number(isoDay[1]);
     const m = Number(isoDay[2]);
@@ -85,46 +124,92 @@ function defaultExpiresAt45DaysFromNow(): Date {
   return d;
 }
 
+function validHttpOriginUrl(raw: string | undefined): string | null {
+  if (!raw?.trim()) return null;
+  try {
+    const u = new URL(raw.trim());
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    return u.href;
+  } catch {
+    return null;
+  }
+}
+
+function routingPromptBlock(body: ManualRoutingBody | undefined): string {
+  if (!body?.applyMode) return "";
+  const lines = ["--- REVIEWER-PROVIDED APPLICATION ROUTING (prefer over vague text) ---"];
+  lines.push(`Mode: ${body.applyMode}`);
+  if (body.applyMode === "link" && body.linkUrl?.trim()) {
+    lines.push(`Link URL reported: ${body.linkUrl.trim()}`);
+  }
+  if (body.applyMode === "email") {
+    if (body.applyEmail?.trim()) {
+      lines.push(`Email reported for applications: ${body.applyEmail.trim()}`);
+    }
+    if (body.instructions?.trim()) {
+      lines.push(`Special instructions: ${body.instructions.trim()}`);
+    }
+  }
+  lines.push("");
+  return lines.join("\n");
+}
+
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as {
     url?: string;
     rawText?: string;
+    intakeSource?: "scan-jina" | "pdf" | "manual";
+    documentLabel?: string;
+    manualRouting?: ManualRoutingBody;
   } | null;
-  const url = body?.url?.trim();
-  const rawText = body?.rawText?.trim();
 
-  if (!url) {
-    return NextResponse.json({ error: "Missing url" }, { status: 400 });
-  }
+  const routing = body?.manualRouting;
+  const intakeSource = body?.intakeSource;
+  const documentLabel = body?.documentLabel?.trim();
 
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return NextResponse.json(
-      { error: "Invalid URL. Include http or https." },
-      { status: 400 },
-    );
-  }
+  const urlCandidate = body?.url?.trim();
+  const rt = body?.rawText?.trim();
 
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    return NextResponse.json(
-      { error: "URL must use http or https." },
-      { status: 400 },
-    );
-  }
+  let markdown = "";
+  /** Label for AI prompt only — not always a reachable URL when raw intake is pasted. */
+  let promptAnchor = "https://intake.manual/fbc-ingest";
 
-  let markdown: string;
-  if (rawText) {
-    markdown = rawText.slice(0, 100_000);
+  if (rt) {
+    markdown = rt.slice(0, 100_000);
     if (!markdown.trim()) {
       return NextResponse.json(
-        { error: "Raw text fallback was empty after trimming." },
+        { error: "Raw text payload was empty after trimming." },
         { status: 422 },
       );
     }
-  } else {
-    const jinaUrl = `https://r.jina.ai/${url}`;
+    const fromLink = routing?.applyMode === "link"
+      ? validHttpOriginUrl(routing.linkUrl)
+      : validHttpOriginUrl(urlCandidate);
+    promptAnchor =
+      fromLink ??
+      (routing?.applyMode === "email" && routing.applyEmail?.trim()
+        ? `mailto:${routing.applyEmail.trim()}`
+        : intakeSource === "pdf"
+          ? documentLabel
+            ? `pdf:${documentLabel}`
+            : "pdf:upload"
+          : "manual-ingest");
+
+    const routingHints = routingPromptBlock(routing);
+    markdown = routingHints.trim()
+      ? `${routingHints.trim()}\n\n${markdown}`
+      : markdown;
+  } else if (urlCandidate) {
+    const parsed = validHttpOriginUrl(urlCandidate);
+    if (!parsed) {
+      return NextResponse.json(
+        { error: "Invalid URL. Include http or https." },
+        { status: 400 },
+      );
+    }
+    promptAnchor = parsed;
+
+    const jinaUrl = `https://r.jina.ai/${parsed}`;
     const readerResponse = await fetch(jinaUrl, {
       headers: { Accept: "text/plain" },
     });
@@ -133,6 +218,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error: `Jina Reader failed (${readerResponse.status}): ${readerResponse.statusText}`,
+          code: "JINA_FAILED",
         },
         { status: 502 },
       );
@@ -145,66 +231,86 @@ export async function POST(request: Request) {
         { status: 422 },
       );
     }
-    
-    // === THE ANTI-BOT TRIPWIRE ===
-    // If the scraper was served a security challenge instead of the job, throw an error to trigger the UI fallback
+
     const botKeywords = [
-      "JavaScript is disabled", 
-      "Max challenge attempts exceeded", 
-      "verify that you're not a robot", 
+      "JavaScript is disabled",
+      "Max challenge attempts exceeded",
+      "verify that you're not a robot",
       "Enable JavaScript and then reload",
-      "Cloudflare"
+      "Cloudflare",
     ];
-    
-    const isBotWall = botKeywords.some(keyword => markdown.includes(keyword));
+
+    const isBotWall = botKeywords.some((keyword) =>
+      markdown.includes(keyword),
+    );
     if (isBotWall) {
       return NextResponse.json(
-        { error: "ATS Anti-Bot Wall Detected. Fallback required." },
-        { status: 403 }
+        { error: "ATS Anti-Bot Wall Detected. Fallback required.", code: "BOT_WALL" },
+        { status: 403 },
       );
     }
+  } else {
+    return NextResponse.json(
+      {
+        error: "Provide either a job URL to scan or raw job text.",
+      },
+      { status: 400 },
+    );
   }
 
   try {
     const { object } = await generateObject({
       model: openai("gpt-4o-mini"),
-      system: `You are an expert MBA technical recruiter for a top-tier business school. 
-Your job is to read parsed HTML/Markdown from a job posting and extract the core details perfectly.
-Ignore nav bars, cookie policies, and boilerplate footer text. 
-If you cannot find a specific application deadline or salary, do not guess, just return null.`,
+      system: `You are an expert MBA technical recruiter for a top-tier business school.
+Your job is to read parsed HTML/Markdown or pasted job text and extract structured fields.
+Ignore nav bars, cookie policies, boilerplate footers.
+
+Application methods:
+- If the posting directs candidates to apply through a careers site or ATS link (Greenhouse, Workday, etc.), populate application_url with a full https URL.
+- If the posting accepts applications ONLY by emailing a recruiter or careers inbox, leave application_url null and set application_email to that address (single best address).
+- If the posting mentions both link and email, prefer the canonical apply link unless the primary CTA is clearly email-only.
+Use application_instructions for subjects, filenames, attachments, or format requirements when emailing.
+
+If an application deadline or salary cannot be inferred with confidence, output null.`,
       schema: jobExtractionSchema,
-      prompt: `You are parsing a job posting. The following markdown was read from: ${url}
+      prompt: `You are parsing a job posting. Prompt source anchor: ${promptAnchor}
 
 Rules:
-- For locations: list every distinct work location, region, or remote variant as separate array entries.
-- Enums: you must output exactly one value from each allowed enum. Do not invent new labels.
-- application_url: the primary apply link for this job.
+- For locations: list every distinct work location as separate entries.
+- Enums: output exactly one value from each allowed enum.
+- application_url: valid https applicant URL or null when email-only.
+- application_email: email inbox for applications only when posting is email-centric; otherwise null.
 
-=== EXAMPLE OF PERFECT EXTRACTION ===
-Example Input Markdown:
-"Stripe, Inc. is hiring a Summer 2027 Product Management Intern. 
-Location: SF, New York, or Remote (US). 
-Pay: 10k-12k/mo. 
-Visa sponsorship is not available for this role.
-Deadline to apply is October 15th."
+=== EXAMPLE ===
+Input text includes "Apply: jobs@firm.com subject line Analyst"
+→ application_email: "jobs@firm.com", application_instructions: include subject ...", application_url: null
+=== END ===
 
-Example Expected Output Behavior:
-- title: "Product Management Intern" (Stripped the 'Summer 2027' fluff)
-- company: "Stripe" (Stripped the ', Inc.')
-- locations: ["San Francisco, CA", "New York, NY", "Remote US"] (Standardized the city names)
-- employment_type: "Summer Internship" (Inferred from text)
-- position: "Product Management" (Mapped exactly to the Enum)
-- visa_sponsorship: "No" (Explicitly stated)
-- compensation: "$10,000 - $12,000 / month" (Formatted cleanly)
-- application_deadline: "2026-10-15" (Converted to standard YYYY-MM-DD format)
-=====================================
-
---- ACTUAL MARKDOWN TO PARSE ---
-
+--- MARKDOWN / TEXT ---
 ${markdown}
-
 --- END ---`,
     });
+
+    let application_url = object.application_url?.trim() || null;
+    let application_email = object.application_email?.trim().toLowerCase() || null;
+    let application_instructions =
+      object.application_instructions?.trim() || null;
+
+    if (routing?.applyMode === "link" && routing.linkUrl?.trim()) {
+      const href = validHttpOriginUrl(routing.linkUrl.trim());
+      if (href && !application_url) {
+        application_url = href;
+      }
+    }
+    if (routing?.applyMode === "email") {
+      if (routing.applyEmail?.trim()) {
+        const em = routing.applyEmail.trim().toLowerCase();
+        application_email = application_email || em;
+      }
+      if (!application_instructions?.trim() && routing.instructions?.trim()) {
+        application_instructions = routing.instructions.trim();
+      }
+    }
 
     const deadline = parseToDeadlineDate(object.application_deadline);
     const expiresAt = deadline ?? defaultExpiresAt45DaysFromNow();
@@ -217,11 +323,12 @@ ${markdown}
       position: object.position,
       vertical_tag: object.vertical_tag,
       visa_sponsorship: object.visa_sponsorship,
-      // We use ?? "" so the frontend UI form receives empty strings instead of breaking on nulls
       compensation: object.compensation ?? "",
       original_posted_date: object.original_posted_date ?? "",
       application_deadline: object.application_deadline ?? "",
-      application_url: object.application_url,
+      application_url: application_url ?? "",
+      application_email: application_email ?? "",
+      application_instructions: application_instructions ?? "",
       expires_at: expiresAt.toISOString(),
     });
   } catch (err) {

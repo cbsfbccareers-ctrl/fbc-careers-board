@@ -89,7 +89,9 @@ export type PublicJob = {
   vertical_tag: string;
   employment_type: string | null;
   position: string | null;
-  application_url: string;
+  application_url: string | null;
+  application_email: string | null;
+  application_instructions: string | null;
   application_deadline: string | null;
   expires_at: string | null;
   original_posted_date: string | null;
@@ -99,6 +101,26 @@ export type PublicJob = {
 type JobBoardProps = {
   jobs: PublicJob[];
 };
+
+/** Prefer email apply flow when stored; otherwise open application URL. */
+function applyHref(job: PublicJob): string {
+  const em = job.application_email?.trim();
+  if (em) {
+    const instructions = job.application_instructions?.trim();
+    return instructions?.length
+      ? `mailto:${em}?body=${encodeURIComponent(instructions)}`
+      : `mailto:${em}`;
+  }
+  const u = job.application_url?.trim();
+  return u ?? "#";
+}
+
+function applyLinkIsExternal(job: PublicJob): boolean {
+  const em = job.application_email?.trim();
+  if (em) return false;
+  const u = job.application_url?.trim();
+  return !!u?.startsWith("http");
+}
 
 /** True when expires_at has passed — greys out card/row styling when visible. */
 function isJobExpiredForDisplay(job: PublicJob): boolean {
@@ -176,6 +198,8 @@ type EditForm = {
   application_deadline: string;
   expires_at: string;
   application_url: string;
+  application_email: string;
+  application_instructions: string;
 };
 
 const emptyForm = (job: PublicJob): EditForm => ({
@@ -189,7 +213,9 @@ const emptyForm = (job: PublicJob): EditForm => ({
   compensation: job.compensation?.trim() ?? "",
   application_deadline: toDateInputValue(job.application_deadline),
   expires_at: toDateInputValue(job.expires_at),
-  application_url: job.application_url,
+  application_url: job.application_url?.trim() ?? "",
+  application_email: job.application_email?.trim() ?? "",
+  application_instructions: job.application_instructions?.trim() ?? "",
 });
 
 export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
@@ -312,6 +338,37 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
       toast.error("Set an expires date.");
       return;
     }
+    const emailTrim = editForm.application_email.trim();
+    const urlTrim = editForm.application_url.trim();
+
+    let application_email: string | null = null;
+    let application_url: string | null = null;
+    let application_instructions: string | null =
+      editForm.application_instructions.trim() || null;
+
+    if (emailTrim) {
+      if (!emailTrim.includes("@")) {
+        toast.error("Application email does not look valid.");
+        return;
+      }
+      application_email = emailTrim.toLowerCase();
+      application_url = null;
+      if (!application_instructions) application_instructions = null;
+    } else if (urlTrim) {
+      try {
+        const u = new URL(urlTrim);
+        if (u.protocol !== "http:" && u.protocol !== "https:") throw new Error();
+        application_url = u.href;
+      } catch {
+        toast.error("Application URL must be valid http(s).");
+        return;
+      }
+      application_instructions = null;
+    } else {
+      toast.error("Provide either an application URL or an application email.");
+      return;
+    }
+
     setSaveLoading(true);
     try {
       const payload: JobUpdatePayload = {
@@ -325,7 +382,9 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
         compensation: editForm.compensation.trim() || null,
         application_deadline: editForm.application_deadline.trim() || null,
         expires_at: endOfLocalDayToIso(editForm.expires_at),
-        application_url: editForm.application_url.trim(),
+        application_url,
+        application_email,
+        application_instructions,
       };
       const { data, error } = await updateJobFromBoard(payload);
       if (error) {
@@ -583,21 +642,68 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
                     required
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-url">Application URL</Label>
-                  <Input
-                    id="edit-url"
-                    type="url"
-                    value={editForm.application_url}
-                    onChange={(e) =>
-                      setEditForm((f) =>
-                        f ? { ...f, application_url: e.target.value } : f,
-                      )
-                    }
-                    className="text-base"
-                    required
-                  />
-                </div>
+                {editForm.application_email.trim().length > 0 ? (
+                  <div className="space-y-3 rounded-lg border border-border/80 bg-muted/20 p-3">
+                    <Label className="text-base">Apply by email</Label>
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-email" className="text-sm">
+                        Email
+                      </Label>
+                      <Input
+                        id="edit-email"
+                        type="email"
+                        autoComplete="email"
+                        inputMode="email"
+                        value={editForm.application_email}
+                        onChange={(e) =>
+                          setEditForm((f) =>
+                            f
+                              ? { ...f, application_email: e.target.value }
+                              : f,
+                          )
+                        }
+                        className="text-base"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-inst" className="text-sm">
+                        Instructions (optional)
+                      </Label>
+                      <Input
+                        id="edit-inst"
+                        value={editForm.application_instructions}
+                        onChange={(e) =>
+                          setEditForm((f) =>
+                            f
+                              ? {
+                                  ...f,
+                                  application_instructions: e.target.value,
+                                }
+                              : f,
+                          )
+                        }
+                        className="text-base"
+                        placeholder="Optional"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-url">Application URL</Label>
+                    <Input
+                      id="edit-url"
+                      type="url"
+                      value={editForm.application_url}
+                      onChange={(e) =>
+                        setEditForm((f) =>
+                          f ? { ...f, application_url: e.target.value } : f,
+                        )
+                      }
+                      className="text-base"
+                      required={editForm.application_email.trim().length === 0}
+                    />
+                  </div>
+                )}
               </div>
               <SheetFooter className="mt-auto border-t border-border/80 p-4">
                 <Button
@@ -964,9 +1070,13 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
                       asChild
                     >
                       <a
-                        href={job.application_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                        href={applyHref(job)}
+                        {...(applyLinkIsExternal(job)
+                          ? {
+                              target: "_blank" as const,
+                              rel: "noopener noreferrer",
+                            }
+                          : {})}
                       >
                         {ghostVacancy ? "Go to Expired Link" : "Apply"}
                       </a>
@@ -1084,9 +1194,13 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
                     variant={ghostVacancy ? "secondary" : "default"}
                   >
                     <a
-                      href={job.application_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      href={applyHref(job)}
+                      {...(applyLinkIsExternal(job)
+                        ? {
+                            target: "_blank" as const,
+                            rel: "noopener noreferrer",
+                          }
+                        : {})}
                     >
                       {ghostVacancy ? "Go to Expired Link" : "Apply Now"}
                     </a>

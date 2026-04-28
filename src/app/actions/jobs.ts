@@ -14,6 +14,8 @@ const SELECT_COLUMNS = [
   "employment_type",
   "position",
   "application_url",
+  "application_email",
+  "application_instructions",
   "application_deadline",
   "expires_at",
   "original_posted_date",
@@ -54,7 +56,9 @@ export type JobUpdatePayload = {
   compensation: string | null;
   application_deadline: string | null;
   expires_at: string;
-  application_url: string;
+  application_url: string | null;
+  application_email: string | null;
+  application_instructions: string | null;
 };
 
 export async function updateJobFromBoard(
@@ -74,6 +78,12 @@ export async function updateJobFromBoard(
       application_deadline: rest.application_deadline,
       expires_at: rest.expires_at,
       application_url: rest.application_url,
+      application_email: rest.application_email?.trim()
+        ? rest.application_email.trim()
+        : null,
+      application_instructions: rest.application_instructions?.trim()
+        ? rest.application_instructions.trim()
+        : null,
     })
     .eq("id", id)
     .select(SELECT_COLUMNS)

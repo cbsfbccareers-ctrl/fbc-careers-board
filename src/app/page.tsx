@@ -6,7 +6,7 @@ import { JobBoard, type PublicJob } from "@/components/JobBoard";
 export const dynamic = "force-dynamic";
 
 const JOB_COLUMNS =
-  "id, status, created_at, title, company, locations, compensation, vertical_tag, employment_type, position, application_url, application_deadline, expires_at, original_posted_date, visa_sponsorship";
+  "id, status, created_at, title, company, locations, compensation, vertical_tag, employment_type, position, application_url, application_email, application_instructions, application_deadline, expires_at, original_posted_date, visa_sponsorship";
 
 export default async function Home() {
   const { data, error } = await supabase
