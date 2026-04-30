@@ -20,6 +20,7 @@ const SELECT_COLUMNS = [
   "expires_at",
   "original_posted_date",
   "visa_sponsorship",
+  "description",
 ].join(", ");
 
 export type JobListStatus = "Active" | "Archived";

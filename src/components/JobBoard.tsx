@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { LayoutGrid, MoreVertical, Plus, Table2, Trash2 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 
 import {
   deleteJob,
@@ -96,6 +97,8 @@ export type PublicJob = {
   expires_at: string | null;
   original_posted_date: string | null;
   visa_sponsorship: string | null;
+  /** AI-cleaned Markdown job description; null for legacy rows. */
+  description: string | null;
 };
 
 type JobBoardProps = {
@@ -235,6 +238,7 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
 
   const [archiveTarget, setArchiveTarget] = useState<PublicJob | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PublicJob | null>(null);
+  const [detailsJob, setDetailsJob] = useState<PublicJob | null>(null);
 
   useEffect(() => {
     if (isAdmin) return;
@@ -445,6 +449,44 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
 
   return (
     <div className="w-full space-y-8 text-base leading-relaxed">
+      <Sheet
+        open={!!detailsJob}
+        onOpenChange={(open) => {
+          if (!open) setDetailsJob(null);
+        }}
+      >
+        <SheetContent
+          side="right"
+          className="flex w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-2xl"
+        >
+          {detailsJob ? (
+            <>
+              <SheetHeader className="border-b border-border/80 px-6 py-4 text-left">
+                <SheetTitle className="pr-8 text-left text-xl leading-snug">
+                  {detailsJob.title}
+                </SheetTitle>
+                <SheetDescription className="text-left text-base">
+                  {detailsJob.company}
+                </SheetDescription>
+              </SheetHeader>
+              <div className="flex-1 overflow-y-auto px-6 py-4">
+                {detailsJob.description != null &&
+                String(detailsJob.description).trim() !== "" ? (
+                  <div className="prose prose-sm dark:prose-invert max-w-none">
+                    <ReactMarkdown>{detailsJob.description}</ReactMarkdown>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No description is available for this listing yet. Older
+                    postings may not include an AI-cleaned summary.
+                  </p>
+                )}
+              </div>
+            </>
+          ) : null}
+        </SheetContent>
+      </Sheet>
+
       <Sheet
         open={!!editJob}
         onOpenChange={(o) => {
@@ -1002,8 +1044,8 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
                 <TableHead className="h-8 min-w-[6rem] py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Added
                 </TableHead>
-                <TableHead className="h-8 w-[1%] min-w-[4.5rem] py-1.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Apply
+                <TableHead className="h-8 w-[1%] min-w-[12rem] py-1.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Actions
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -1060,27 +1102,38 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
                   <TableCell className="whitespace-nowrap py-1.5 align-top text-xs text-muted-foreground">
                     {formatAddedAgo(job.created_at)}
                   </TableCell>
-                  <TableCell className="whitespace-nowrap py-1.5 text-right align-top">
-                    <Button
-                      size="sm"
-                      className="text-sm"
-                      variant={
-                        ghostVacancy ? "secondary" : "default"
-                      }
-                      asChild
-                    >
-                      <a
-                        href={applyHref(job)}
-                        {...(applyLinkIsExternal(job)
-                          ? {
-                              target: "_blank" as const,
-                              rel: "noopener noreferrer",
-                            }
-                          : {})}
+                  <TableCell className="py-1.5 text-right align-top">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="text-sm"
+                        onClick={() => setDetailsJob(job)}
                       >
-                        {ghostVacancy ? "Go to Expired Link" : "Apply"}
-                      </a>
-                    </Button>
+                        View Details
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="text-sm"
+                        variant={
+                          ghostVacancy ? "secondary" : "default"
+                        }
+                        asChild
+                      >
+                        <a
+                          href={applyHref(job)}
+                          {...(applyLinkIsExternal(job)
+                            ? {
+                                target: "_blank" as const,
+                                rel: "noopener noreferrer",
+                              }
+                            : {})}
+                        >
+                          {ghostVacancy ? "Go to Expired Link" : "Apply"}
+                        </a>
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
                 );
@@ -1182,11 +1235,11 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
                     {formatAddedAgo(job.created_at)}
                   </p>
                 </div>
-                <CardFooter className="mt-auto flex flex-col gap-0 px-6 pb-6 sm:px-7">
+                <CardFooter className="mt-auto flex flex-col gap-2 px-6 pb-6 sm:flex-row sm:px-7">
                   <Button
                     asChild
                     className={cn(
-                      "h-11 w-full text-base font-medium",
+                      "h-11 w-full flex-1 text-base font-medium sm:min-w-0",
                       ghostVacancy &&
                         "border border-input shadow-none",
                     )}
@@ -1204,6 +1257,14 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
                     >
                       {ghostVacancy ? "Go to Expired Link" : "Apply Now"}
                     </a>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-11 w-full flex-1 text-base font-medium sm:w-auto sm:min-w-[10.5rem]"
+                    onClick={() => setDetailsJob(job)}
+                  >
+                    View Details
                   </Button>
                 </CardFooter>
               </Card>

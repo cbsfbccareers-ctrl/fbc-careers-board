@@ -88,6 +88,11 @@ const jobExtractionSchema = z.object({
     .describe(
       "If apply-by-email is used: subject line requirements, attachments, or wording from the posting. Null if not stated.",
     ),
+  description: z
+    .string()
+    .describe(
+      "AI-cleaned Markdown job description with About the Role, Responsibilities, and Requirements (### headings, bullets, **bold**). No site nav or EEO boilerplate.",
+    ),
 });
 
 export const maxDuration = 60;
@@ -265,6 +270,8 @@ export async function POST(request: Request) {
 Your job is to read parsed HTML/Markdown or pasted job text and extract structured fields.
 Ignore nav bars, cookie policies, boilerplate footers.
 
+Analyze the raw text and generate a comprehensive, clean Markdown description of the role. Include sections for About the Role, Responsibilities, and Requirements. Use proper markdown formatting (H3s, bullet points, bold text). Remove any boilerplate website navigation junk or EEO statements. Output this strictly into the description field.
+
 Application methods:
 - If the posting directs candidates to apply through a careers site or ATS link (Greenhouse, Workday, etc.), populate application_url with a full https URL.
 - If the posting accepts applications ONLY by emailing a recruiter or careers inbox, leave application_url null and set application_email to that address (single best address).
@@ -276,6 +283,7 @@ If an application deadline or salary cannot be inferred with confidence, output 
       prompt: `You are parsing a job posting. Prompt source anchor: ${promptAnchor}
 
 Rules:
+- description: required Markdown per system instructions; substantive role content only.
 - For locations: list every distinct work location as separate entries.
 - Enums: output exactly one value from each allowed enum.
 - application_url: valid https applicant URL or null when email-only.
@@ -329,6 +337,7 @@ ${markdown}
       application_url: application_url ?? "",
       application_email: application_email ?? "",
       application_instructions: application_instructions ?? "",
+      description: object.description?.trim() ?? "",
       expires_at: expiresAt.toISOString(),
     });
   } catch (err) {

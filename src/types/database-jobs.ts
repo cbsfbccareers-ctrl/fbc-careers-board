@@ -4,6 +4,7 @@
  *
  * ALTER TABLE jobs ADD COLUMN IF NOT EXISTS application_email text;
  * ALTER TABLE jobs ADD COLUMN IF NOT EXISTS application_instructions text;
+ * ALTER TABLE jobs ADD COLUMN IF NOT EXISTS description text; -- AI-cleaned Markdown body
  * ALTER COLUMN application_url DROP NOT NULL; -- allow email-only postings
  */
 

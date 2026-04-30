@@ -53,6 +53,7 @@ type ReviewForm = {
   application_url: string;
   application_email: string;
   application_instructions: string;
+  description: string;
   expires_at: string;
 };
 
@@ -181,6 +182,7 @@ export default function AdminIngestPage() {
       application_url: data.application_url ?? "",
       application_email: data.application_email ?? "",
       application_instructions: data.application_instructions ?? "",
+      description: typeof data.description === "string" ? data.description : "",
       expires_at: isoToDateInputValue(data.expires_at),
     });
   }
@@ -442,6 +444,7 @@ export default function AdminIngestPage() {
         application_url: applicationUrl,
         application_email: applicationEmail,
         application_instructions: applicationInstructions,
+        description: result.description.trim() || null,
         status: "Active",
         expires_at: dateInputToIsoTimestamptz(result.expires_at),
         raw_ai_output: rawAiSnapshot,
