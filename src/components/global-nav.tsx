@@ -16,7 +16,7 @@ function AdminModeControls() {
       <div
         className={cn(
           "flex max-w-full shrink-0 items-center gap-0.5 rounded-full border pl-2.5",
-          "border-emerald-500/35 bg-emerald-500/10 text-emerald-900 dark:text-emerald-100",
+          "border-accent/40 bg-accent/15 text-accent",
         )}
         role="status"
         aria-label="Admin mode is active"
@@ -33,7 +33,7 @@ function AdminModeControls() {
           size="sm"
           onClick={logout}
           aria-label="Log out of admin mode"
-          className="h-8 shrink-0 gap-1 rounded-full px-2 text-xs text-emerald-900 hover:bg-emerald-500/20 dark:text-emerald-100 dark:hover:bg-emerald-500/20"
+          className="h-8 shrink-0 gap-1 rounded-full px-2 text-xs text-accent hover:bg-accent/20"
         >
           <LogOut className="size-3.5 sm:hidden" aria-hidden />
           <span className="hidden sm:inline">Log out</span>
@@ -57,23 +57,27 @@ function AdminModeControls() {
 
 export function GlobalNav() {
   return (
-    <header
-      className="sticky top-0 z-50 w-full border-b border-border/80 bg-background/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/90"
-    >
+    <header className="sticky top-0 z-50 w-full border-b border-border bg-background shadow-sm">
+      <div
+        className="h-1 w-full bg-fbc-gradient"
+        aria-hidden
+      />
       <div className="mx-auto flex h-14 w-full max-w-[100rem] items-center justify-between gap-3 px-4 sm:h-[3.5rem] sm:gap-4 sm:px-6 lg:px-10">
-        <div className="flex min-w-0 min-h-0 flex-1 items-center gap-3 overflow-x-auto py-0.5 sm:gap-8">
+        <div className="flex min-h-0 min-w-0 flex-1 items-center gap-3 overflow-x-auto py-0.5 sm:gap-8">
           <Link
             href="/"
             className="group flex min-w-0 shrink-0 items-center gap-2.5 sm:gap-3"
           >
-            <Image
-              src="/logo.png"
-              alt="Columbia FBC"
-              width={160}
-              height={32}
-              className="h-8 w-auto shrink-0"
-              priority
-            />
+            <div className="p-4">
+              <Image
+                src="/logo.png"
+                alt="Columbia FBC"
+                width={160}
+                height={32}
+                className="h-8 w-auto shrink-0"
+                priority
+              />
+            </div>
             <span className="max-w-[9rem] truncate text-sm font-semibold tracking-tight text-foreground sm:max-w-none sm:text-base sm:text-lg">
               Columbia FBC
             </span>
@@ -84,19 +88,19 @@ export function GlobalNav() {
           >
             <Link
               href="/"
-              className="shrink-0 text-foreground/90 transition-colors hover:text-foreground"
+              className="shrink-0 text-foreground/90 transition-colors hover:text-accent"
             >
               Job Board
             </Link>
             <Link
               href="/admin/ingest"
-              className="shrink-0 text-foreground/90 transition-colors hover:text-foreground"
+              className="shrink-0 text-foreground/90 transition-colors hover:text-accent"
             >
               Add a Job
             </Link>
             <Link
               href="/admin"
-              className="shrink-0 text-foreground/90 transition-colors hover:text-foreground"
+              className="shrink-0 text-foreground/90 transition-colors hover:text-accent"
             >
               Admin Portal
             </Link>
