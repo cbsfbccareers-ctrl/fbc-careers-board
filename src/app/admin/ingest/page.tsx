@@ -32,11 +32,22 @@ import { toast } from "@/lib/toast";
 import { supabase } from "@/utils/supabase";
 
 const selectClassName = cn(
-  "h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs",
+  "h-9 w-full rounded-md border border-[#006088] bg-transparent px-3 text-sm text-white shadow-xs",
   "outline-none transition-[color,box-shadow]",
-  "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
+  "focus-visible:border-[#009BDB] focus-visible:ring-[3px] focus-visible:ring-[#009BDB]/30",
   "disabled:cursor-not-allowed disabled:opacity-50",
-  "dark:bg-input/30",
+);
+
+const INGEST_CARD_CLASSNAME =
+  "border border-[#006088] bg-[#002230] text-white shadow-md";
+
+const INGEST_FIELD_STYLES = cn(
+  "[&_[data-slot=input]]:border-[#006088] [&_[data-slot=input]]:bg-transparent [&_[data-slot=input]]:text-white",
+  "[&_[data-slot=input]]:placeholder:text-slate-400 [&_[data-slot=input]]:focus-visible:border-[#009BDB]",
+  "[&_[data-slot=input]]:focus-visible:ring-[#009BDB]/30 [&_[data-slot=input]]:dark:bg-transparent",
+  "[&_[data-slot=textarea]]:border-[#006088] [&_[data-slot=textarea]]:bg-transparent [&_[data-slot=textarea]]:text-white",
+  "[&_[data-slot=textarea]]:placeholder:text-slate-400 [&_[data-slot=textarea]]:focus-visible:border-[#009BDB]",
+  "[&_[data-slot=textarea]]:focus-visible:ring-[#009BDB]/30 [&_[data-slot=textarea]]:dark:bg-transparent",
 );
 
 type ReviewForm = {
@@ -469,15 +480,15 @@ export default function AdminIngestPage() {
 
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 px-4 py-10 sm:px-6">
-      <Card>
+      <Card className={INGEST_CARD_CLASSNAME}>
         <CardHeader>
           <CardTitle>Ingest job</CardTitle>
-          <CardDescription>
+          <CardDescription className="text-slate-300">
             Scan a URL, extract from a PDF in the browser, or paste manually.
             Review every field, then save.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-8">
+        <CardContent className={cn("space-y-8", INGEST_FIELD_STYLES)}>
           <Tabs
             value={intakeTab}
             onValueChange={(v) => setIntakeTab(v as "scan" | "pdf" | "manual")}
@@ -504,7 +515,7 @@ export default function AdminIngestPage() {
                     disabled={scanning}
                     autoComplete="url"
                   />
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-slate-400">
                     Must be <span className="font-mono">http</span> or{" "}
                     <span className="font-mono">https</span>. If scanning is
                     blocked, switch to Manual Entry or PDF.
@@ -550,17 +561,19 @@ export default function AdminIngestPage() {
                   role="presentation"
                   className={cn(
                     "rounded-lg border-2 border-dashed px-6 py-10 text-center transition-colors",
-                    pdfDragging ? "border-primary bg-primary/5" : "border-border",
+                    pdfDragging
+                      ? "border-[#009BDB] bg-[#006088]/20"
+                      : "border-[#006088] bg-transparent",
                   )}
                 >
                   <Upload
-                    className="mx-auto size-10 text-muted-foreground"
+                    className="mx-auto size-10 text-slate-400"
                     aria-hidden
                   />
                   <p className="mt-3 text-sm font-medium">
                     Drag and drop a job posting PDF here
                   </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <p className="mt-1 text-xs text-slate-400">
                     Text is extracted in your browser only — the file is not
                     uploaded to our servers.
                   </p>
@@ -708,7 +721,7 @@ export default function AdminIngestPage() {
           {result && (
             <form
               onSubmit={handleSave}
-              className="space-y-4 border-t border-border pt-8"
+              className="space-y-4 border-t border-[#006088] pt-8"
             >
               <h2 className="text-sm font-semibold">Review and edit</h2>
               <div className="space-y-2">
@@ -737,7 +750,7 @@ export default function AdminIngestPage() {
               </div>
               <div className="space-y-2">
                 <p className="text-sm font-medium">Locations</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-slate-400">
                   One or more work locations. Add or remove rows as needed.
                 </p>
                 <div className="space-y-2">
@@ -915,14 +928,14 @@ export default function AdminIngestPage() {
                   }
                   disabled={saving}
                 />
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-slate-400">
                   Informational: what the posting said. The listing expiry
                   you save to the database is{" "}
-                  <span className="font-medium">Expires at</span> below.
+                  <span className="font-medium text-slate-200">Expires at</span> below.
                 </p>
               </div>
               {result.application_email.trim().length > 0 ? (
-                <div className="space-y-4 rounded-lg border border-border/80 bg-muted/20 p-4">
+                <div className="space-y-4 rounded-lg border border-[#006088] bg-[#006088]/10 p-4">
                   <p className="text-sm font-medium">Application (email)</p>
                   <div className="space-y-2">
                     <Label htmlFor="review-application-email">
@@ -994,7 +1007,7 @@ export default function AdminIngestPage() {
                   required
                   disabled={saving}
                 />
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-slate-400">
                   This is the value written to the database. The scan sets it
                   from a stated deadline or a 45-day default; you can override
                   it here.

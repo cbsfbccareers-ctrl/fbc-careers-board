@@ -75,9 +75,26 @@ import {
 } from "@/lib/jobs-constants";
 import { formatAddedAgo } from "@/lib/job-display";
 import { useAdmin } from "@/contexts/AdminContext";
-import { getLocationColor } from "@/lib/location-pill-color";
 import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
+
+const METADATA_BADGE_CLASSNAME =
+  "border-transparent bg-[#006088] text-white font-medium hover:bg-[#006088]/90";
+
+const JOB_CARD_CLASSNAME =
+  "relative flex h-full flex-col border border-[#006088] bg-[#002230] shadow-md";
+
+const TABLE_CONTAINER_CLASSNAME =
+  "w-full min-w-0 overflow-x-auto overflow-y-visible rounded-lg border border-[#006088] bg-[#002230] shadow-sm";
+
+const TABLE_HEAD_CLASSNAME =
+  "h-8 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-300";
+
+const TABLE_HEADER_ROW_CLASSNAME =
+  "border-b border-[#006088] bg-[#002230] hover:bg-[#002230]";
+
+const TABLE_ROW_CLASSNAME =
+  "border-b border-[#006088] bg-transparent text-slate-200 hover:bg-[#006088]/10";
 
 export type PublicJob = {
   id: string;
@@ -170,7 +187,7 @@ function LocationPills({ locations }: { locations: string[] | null }) {
     .map((l) => l.trim())
     .filter(Boolean);
   if (list.length === 0) {
-    return <span className="text-sm text-muted-foreground">—</span>;
+    return <span className="text-sm text-slate-400">—</span>;
   }
   return (
     <div className="flex flex-wrap gap-1.5">
@@ -179,8 +196,8 @@ function LocationPills({ locations }: { locations: string[] | null }) {
           key={`${i}-${loc}`}
           variant="secondary"
           className={cn(
-            "max-w-full font-normal [text-wrap:balance]",
-            getLocationColor(loc),
+            "max-w-full [text-wrap:balance]",
+            METADATA_BADGE_CLASSNAME,
           )}
         >
           {loc}
@@ -1018,46 +1035,51 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
       ) : null}
 
       {filtered.length > 0 && viewMode === "table" ? (
-        <div className="w-full min-w-0 overflow-x-auto overflow-y-visible rounded-lg border border-border/80 bg-card shadow-sm">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
+        <div className={TABLE_CONTAINER_CLASSNAME}>
+          <Table className="bg-transparent">
+            <TableHeader className="bg-[#002230]">
+              <TableRow className={TABLE_HEADER_ROW_CLASSNAME}>
                 {isAdmin && <TableHead className="w-8 p-1" aria-hidden />}
-                <TableHead className="h-8 min-w-[8rem] py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <TableHead className={cn(TABLE_HEAD_CLASSNAME, "min-w-[8rem]")}>
                   Role
                 </TableHead>
-                <TableHead className="h-8 min-w-[6rem] py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <TableHead className={cn(TABLE_HEAD_CLASSNAME, "min-w-[6rem]")}>
                   Company
                 </TableHead>
-                <TableHead className="h-8 min-w-[9rem] py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <TableHead className={cn(TABLE_HEAD_CLASSNAME, "min-w-[9rem]")}>
                   Location
                 </TableHead>
-                <TableHead className="h-8 min-w-[5rem] py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <TableHead className={cn(TABLE_HEAD_CLASSNAME, "min-w-[5rem]")}>
                   Type
                 </TableHead>
-                <TableHead className="h-8 min-w-[6rem] py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <TableHead className={cn(TABLE_HEAD_CLASSNAME, "min-w-[6rem]")}>
                   Position
                 </TableHead>
-                <TableHead className="h-8 min-w-[5rem] py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <TableHead className={cn(TABLE_HEAD_CLASSNAME, "min-w-[5rem]")}>
                   Industry
                 </TableHead>
-                <TableHead className="h-8 min-w-[6rem] py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <TableHead className={cn(TABLE_HEAD_CLASSNAME, "min-w-[6rem]")}>
                   Added
                 </TableHead>
-                <TableHead className="h-8 w-[1%] min-w-[12rem] py-1.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <TableHead
+                  className={cn(
+                    TABLE_HEAD_CLASSNAME,
+                    "w-[1%] min-w-[12rem] text-right",
+                  )}
+                >
                   Actions
                 </TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody>
+            <TableBody className="bg-transparent">
               {filtered.map((job) => {
                 const ghostVacancy = isJobExpiredForDisplay(job);
                 return (
                   <TableRow
                     key={job.id}
                     className={cn(
-                      "text-sm",
-                      ghostVacancy && "bg-muted/20 opacity-60 grayscale",
+                      TABLE_ROW_CLASSNAME,
+                      ghostVacancy && "opacity-60 grayscale",
                     )}
                   >
                   {isAdmin && (
@@ -1070,23 +1092,35 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
                       />
                     </TableCell>
                   )}
-                  <TableCell className="whitespace-normal py-1.5 align-top font-medium text-foreground">
+                  <TableCell className="whitespace-normal py-1.5 align-top font-medium text-white">
                     {job.title}
                   </TableCell>
-                  <TableCell className="whitespace-normal py-1.5 align-top">
+                  <TableCell className="whitespace-normal py-1.5 align-top text-slate-200">
                     {job.company}
                   </TableCell>
                   <TableCell className="min-w-[9rem] max-w-[14rem] py-1.5 align-top">
                     <LocationPills locations={job.locations} />
                   </TableCell>
-                  <TableCell className="whitespace-nowrap py-1.5 align-top text-muted-foreground">
-                    {job.employment_type?.trim() || "—"}
+                  <TableCell className="whitespace-nowrap py-1.5 align-top">
+                    {job.employment_type?.trim() ? (
+                      <Badge
+                        variant="secondary"
+                        className={cn("text-xs", METADATA_BADGE_CLASSNAME)}
+                      >
+                        {job.employment_type.trim()}
+                      </Badge>
+                    ) : (
+                      "—"
+                    )}
                   </TableCell>
                   <TableCell className="align-top">
                     {job.position?.trim() ? (
                       <Badge
                         variant="secondary"
-                        className="whitespace-nowrap text-xs"
+                        className={cn(
+                          "whitespace-nowrap text-xs",
+                          METADATA_BADGE_CLASSNAME,
+                        )}
                       >
                         {job.position.trim()}
                       </Badge>
@@ -1095,11 +1129,14 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
                     )}
                   </TableCell>
                   <TableCell className="whitespace-nowrap py-1.5 align-top">
-                    <Badge variant="outline" className="text-xs">
+                    <Badge
+                      variant="secondary"
+                      className={cn("text-xs", METADATA_BADGE_CLASSNAME)}
+                    >
                       {job.vertical_tag}
                     </Badge>
                   </TableCell>
-                  <TableCell className="whitespace-nowrap py-1.5 align-top text-xs text-muted-foreground">
+                  <TableCell className="whitespace-nowrap py-1.5 align-top text-xs text-slate-300">
                     {formatAddedAgo(job.created_at)}
                   </TableCell>
                   <TableCell className="py-1.5 text-right align-top">
@@ -1156,7 +1193,7 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
             <li key={job.id} className="min-w-0">
               <Card
                 className={cn(
-                  "relative flex h-full flex-col border-border/80 shadow-md",
+                  JOB_CARD_CLASSNAME,
                   "transition-shadow hover:shadow-lg",
                   !ghostVacancy &&
                     job.status === "Archived" &&
@@ -1178,22 +1215,31 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
                   <h2 className="text-balance pr-2 text-xl font-bold leading-snug text-foreground">
                     {job.title}
                   </h2>
-                  <p className="text-base text-muted-foreground">
+                  <p className="text-base text-slate-200">
                     {job.company}
                   </p>
                   <div className="flex flex-wrap gap-1.5 pt-0.5">
-                    <Badge variant="secondary" className="text-sm font-medium">
+                    <Badge
+                      variant="secondary"
+                      className={cn("text-sm", METADATA_BADGE_CLASSNAME)}
+                    >
                       {job.vertical_tag}
                     </Badge>
                     {job.position?.trim() ? (
-                      <Badge variant="outline" className="text-sm font-medium">
+                      <Badge
+                        variant="secondary"
+                        className={cn("text-sm", METADATA_BADGE_CLASSNAME)}
+                      >
                         {job.position.trim()}
                       </Badge>
                     ) : null}
                     {isAdmin && job.status === "Archived" ? (
                       <Badge
-                        variant="outline"
-                        className="text-xs text-muted-foreground"
+                        variant="secondary"
+                        className={cn(
+                          "text-xs",
+                          "border border-[#009BDB] bg-transparent text-[#B1E5FB] hover:bg-[#006088]/20",
+                        )}
                       >
                         Archived
                       </Badge>
@@ -1202,36 +1248,37 @@ export function JobBoard({ jobs: initialFromServer }: JobBoardProps) {
                 </CardHeader>
                 <CardContent className="flex flex-1 flex-col gap-3 px-6 pb-2 text-base sm:px-7">
                   <div>
-                    <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-slate-300">
                       Locations
                     </p>
                     <LocationPills locations={job.locations} />
                   </div>
                   {job.employment_type != null &&
                   String(job.employment_type).trim() !== "" ? (
-                    <p>
-                      <span className="font-medium text-foreground/90">
-                        Type:{" "}
-                      </span>
-                      <span className="text-muted-foreground">
+                    <p className="flex flex-wrap items-center gap-1.5">
+                      <span className="font-medium text-slate-200">Type:</span>
+                      <Badge
+                        variant="secondary"
+                        className={cn("text-sm", METADATA_BADGE_CLASSNAME)}
+                      >
                         {String(job.employment_type).trim()}
-                      </span>
+                      </Badge>
                     </p>
                   ) : null}
                   {job.compensation != null &&
                   String(job.compensation).trim() !== "" ? (
                     <p>
-                      <span className="font-medium text-foreground/90">
+                      <span className="font-medium text-slate-200">
                         Compensation:{" "}
                       </span>
-                      <span className="text-muted-foreground">
+                      <span className="text-slate-300">
                         {String(job.compensation).trim()}
                       </span>
                     </p>
                   ) : null}
                 </CardContent>
                 <div className="px-6 pb-1 sm:px-7">
-                  <p className="text-right text-xs text-muted-foreground">
+                  <p className="text-right text-xs text-slate-300">
                     {formatAddedAgo(job.created_at)}
                   </p>
                 </div>
