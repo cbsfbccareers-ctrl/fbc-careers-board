@@ -45,7 +45,7 @@ Phase 3: The Copilot Ingestion Pipeline (Human-in-the-Loop)
 - Build UI at /admin/ingest with a URL input and a review form.
 - API route fetches URL via Jina Reader API (r.jina.ai).
 - Fallback: Support an optional 'rawText' input. If provided, skip the Jina fetch and parse the pasted text directly, bypassing anti-bot protections.
-- Use Vercel AI SDK (gpt-4o-mini) to extract:
+- Use Vercel AI SDK (gpt-6-luna, overridable via INGEST_MODEL) to extract:
   - title (string)
   - company (string)
   - locations (array of strings)
