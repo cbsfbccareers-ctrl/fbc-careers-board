@@ -14,6 +14,10 @@ import {
   type VisaSponsorship,
 } from "@/lib/jobs-constants";
 
+// gpt-4o-mini is retired by OpenAI on 2027-01-14; gpt-6-luna is the recommended replacement.
+// Override with INGEST_MODEL to switch models without a code change.
+const INGEST_MODEL = process.env.INGEST_MODEL || "gpt-6-luna";
+
 const employmentEnum = z.enum(
   EMPLOYMENT_TYPES as unknown as [EmploymentType, ...EmploymentType[]],
 );
@@ -265,7 +269,7 @@ export async function POST(request: Request) {
 
   try {
     const { object } = await generateObject({
-      model: openai("gpt-4o-mini"),
+      model: openai(INGEST_MODEL),
       system: `You are an expert MBA technical recruiter for a top-tier business school.
 Your job is to read parsed HTML/Markdown or pasted job text and extract structured fields.
 Ignore nav bars, cookie policies, boilerplate footers.
