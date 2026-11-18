@@ -9,7 +9,11 @@ import {
   useState,
 } from "react";
 
-import { verifyAdminPassword } from "@/app/actions/admin";
+import {
+  getAdminStatus,
+  logoutAdmin,
+  verifyAdminPassword,
+} from "@/app/actions/admin";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -22,8 +26,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/lib/toast";
-
-const SESSION_ADMIN_KEY = "fbc_admin";
 
 type AdminContextValue = {
   isAdmin: boolean;
@@ -39,18 +41,20 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
   const [adminPassword, setAdminPassword] = useState("");
   const [adminLoginLoading, setAdminLoginLoading] = useState(false);
 
+  // Admin state comes from the server's httpOnly session cookie, so it can't
+  // be faked from the browser (the old sessionStorage flag could be).
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const id = requestAnimationFrame(() => {
-      try {
-        if (sessionStorage.getItem(SESSION_ADMIN_KEY) === "true") {
-          setIsAdmin(true);
-        }
-      } catch {
-        /* sessionStorage can throw in private mode */
-      }
-    });
-    return () => cancelAnimationFrame(id);
+    let cancelled = false;
+    getAdminStatus()
+      .then((ok) => {
+        if (!cancelled && ok) setIsAdmin(true);
+      })
+      .catch(() => {
+        /* treat as logged out */
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const openAdminDialog = useCallback(() => {
@@ -58,13 +62,10 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
-    try {
-      sessionStorage.removeItem(SESSION_ADMIN_KEY);
-    } catch {
-      /* ignore */
-    }
     setIsAdmin(false);
-    toast("Left admin mode");
+    logoutAdmin()
+      .then(() => toast("Left admin mode"))
+      .catch(() => toast.error("Could not end admin session"));
   }, []);
 
   async function onSubmitAdminPassword(e: React.FormEvent) {
@@ -74,11 +75,6 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
       const ok = await verifyAdminPassword(adminPassword);
       if (ok) {
         setIsAdmin(true);
-        try {
-          sessionStorage.setItem(SESSION_ADMIN_KEY, "true");
-        } catch {
-          /* ignore */
-        }
         setAdminDialogOpen(false);
         setAdminPassword("");
         toast.success("Admin mode enabled");

@@ -1,5 +1,6 @@
 "use server";
 
+import { AdminAuthError, isAdminRequest } from "@/lib/admin-session";
 import { supabase } from "@/utils/supabase";
 
 const SELECT_COLUMNS = [
@@ -33,6 +34,12 @@ export async function getJobsList({
   /** When status is Active: false = only expires_at in the future (default). */
   includeExpired?: boolean;
 }): Promise<{ data: unknown[] | null; error: string | null }> {
+  // Archived and expired jobs are admin-only views.
+  const wantsPrivateView = status !== "Active" || includeExpired;
+  if (wantsPrivateView && !(await isAdminRequest())) {
+    return { data: null, error: new AdminAuthError().message };
+  }
+
   let q = supabase
     .from("jobs")
     .select(SELECT_COLUMNS)
@@ -65,6 +72,9 @@ export type JobUpdatePayload = {
 export async function updateJobFromBoard(
   payload: JobUpdatePayload,
 ): Promise<{ data: unknown | null; error: string | null }> {
+  if (!(await isAdminRequest())) {
+    return { data: null, error: new AdminAuthError().message };
+  }
   const { id, ...rest } = payload;
   const { data, error } = await supabase
     .from("jobs")
@@ -97,6 +107,9 @@ export async function setJobStatus(
   id: string,
   status: "Active" | "Archived",
 ): Promise<{ data: unknown | null; error: string | null }> {
+  if (!(await isAdminRequest())) {
+    return { data: null, error: new AdminAuthError().message };
+  }
   const { data, error } = await supabase
     .from("jobs")
     .update({ status })
@@ -110,6 +123,9 @@ export async function setJobStatus(
 export async function deleteJob(
   id: string,
 ): Promise<{ error: string | null }> {
+  if (!(await isAdminRequest())) {
+    return { error: new AdminAuthError().message };
+  }
   const { error } = await supabase.from("jobs").delete().eq("id", id);
 
   return { error: error?.message ?? null };

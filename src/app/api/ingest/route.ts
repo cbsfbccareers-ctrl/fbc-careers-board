@@ -3,6 +3,8 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import { NextResponse } from "next/server";
 
+import { isAdminRequest } from "@/lib/admin-session";
+
 import {
   EMPLOYMENT_TYPES,
   POSITIONS,
@@ -164,6 +166,14 @@ function routingPromptBlock(body: ManualRoutingBody | undefined): string {
 }
 
 export async function POST(request: Request) {
+  // Each call spends OpenAI credits, so only logged-in admins may ingest.
+  if (!(await isAdminRequest())) {
+    return NextResponse.json(
+      { error: "Admin session required. Please log in again.", code: "UNAUTHORIZED" },
+      { status: 401 },
+    );
+  }
+
   const body = (await request.json().catch(() => null)) as {
     url?: string;
     rawText?: string;
